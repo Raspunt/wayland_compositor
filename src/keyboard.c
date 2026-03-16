@@ -53,48 +53,60 @@ static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) 
 }
 
 static void keyboard_handle_key(struct wl_listener *listener, void *data) {
-	struct compositor_keyboard *keyboard = wl_container_of(listener, keyboard, key);
-	struct compositor_state *server = keyboard->server;
-	struct wlr_keyboard_key_event *event = data;
-	struct wlr_seat *seat = server->seat;
+    struct compositor_keyboard *keyboard = wl_container_of(listener, keyboard, key);
+    struct compositor_state *server = keyboard->server;
+    struct wlr_keyboard_key_event *event = data;
+    struct wlr_seat *seat = server->seat;
 
-	/* Обрабатываем только нажатие (не отпускание) */
-	if (event->state != WL_KEYBOARD_KEY_STATE_PRESSED) {
-		wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
-		wlr_seat_keyboard_notify_key(seat, event->time_msec,
-			event->keycode, event->state);
-		return;
-	}
+    /* Получаем keycode и keysyms */
+    uint32_t keycode = event->keycode + 8;
+    const xkb_keysym_t *syms;
+    int nsyms = xkb_state_key_get_syms(keyboard->wlr_keyboard->xkb_state, keycode, &syms);
 
-	uint32_t keycode = event->keycode + 8;
-	const xkb_keysym_t *syms;
-	int nsyms = xkb_state_key_get_syms(
-			keyboard->wlr_keyboard->xkb_state, keycode, &syms);
+    bool handled = false;
+    
+    /* Обрабатываем keybindings ТОЛЬКО при нажатии (PRESS) и с модификатором Alt */
+    if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+        uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
+        
+        /* Отладка */
+        printf("Key PRESS: code=%d, mods=%d (ALT=%d), syms=%d\n", 
+               keycode, modifiers, 
+               (modifiers & WLR_MODIFIER_ALT) ? 1 : 0,
+               nsyms);
+        
+        if (modifiers & WLR_MODIFIER_ALT) {
+            for (int i = 0; i < nsyms; i++) {
+                printf("  Checking sym[%d]=%d\n", i, syms[i]);
+                handled = handle_keybinding(server, modifiers, syms[i]);
+                if (handled) {
+                    printf("  -> handled by compositor (keybinding)\n");
+                    break;
+                }
+            }
+        }
+    }
 
-	uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
-	
-	/* ОТЛАДКА: показываем что нажато */
-	printf("Key: code=%d, mods=%d (ALT=%d), syms=%d\n", 
-	       keycode, modifiers, 
-	       (modifiers & WLR_MODIFIER_ALT) ? 1 : 0,
-	       nsyms);
-	
-	bool handled = false;
-	for (int i = 0; i < nsyms; i++) {
-		printf("  sym[%d]=%d (Return=%d, Escape=%d)\n", 
-		       i, syms[i], XKB_KEY_Return, XKB_KEY_Escape);
-		handled = handle_keybinding(server, modifiers, syms[i]);
-		if (handled) {
-			printf("  -> handled by compositor\n");
-			break;
-		}
-	}
-
-	if (!handled) {
-		wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
-		wlr_seat_keyboard_notify_key(seat, event->time_msec,
-			event->keycode, event->state);
-	}
+    /* Если не обработано как keybinding, передаем клиенту */
+    if (!handled) {
+        /* Устанавливаем эту клавиатуру как активную для seat */
+        wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
+        
+        /* Отладка: проверяем, есть ли фокус */
+        struct wlr_surface *focused = seat->keyboard_state.focused_surface;
+        printf("  -> sending to client, focused_surface=%p\n", (void*)focused);
+        
+        if (focused == NULL) {
+            printf("  WARNING: No focused surface! Click on window to focus.\n");
+        }
+        
+        /* Отправляем событие клиенту (и PRESS, и RELEASE) */
+        wlr_seat_keyboard_notify_key(seat, event->time_msec,
+            event->keycode, event->state);
+    } else {
+        /* Обработано как keybinding - не отправляем клиенту ни PRESS, ни RELEASE */
+        printf("  -> keybinding consumed event, not sending to client\n");
+    }
 }
 
 static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
