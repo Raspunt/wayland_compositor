@@ -1,6 +1,9 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <time.h>
 
 #include <wlr/version.h>
 #include <wlr/backend.h>
@@ -14,59 +17,47 @@
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_scene.h>
 #include <wlr/util/box.h>
 #include <wlr/util/log.h>
 
 #include "src/output.h"
 #include "src/compositor.h"
 
-
-
-
 void output_destroy_notify(struct wl_listener *listener, void *data) {
-        (void)data;  // Подавляет warning
-        (void)listener;  // Если тоже не используется
-        struct mcw_output *output = wl_container_of(listener, output, destroy);
-        wl_list_remove(&output->link);
-        wl_list_remove(&output->destroy.link);
-        wl_list_remove(&output->frame.link);
-        free(output);
+    (void)data;
+    struct mcw_output *output = wl_container_of(listener, output, destroy);
+    
+    wl_list_remove(&output->link);
+    wl_list_remove(&output->destroy.link);
+    wl_list_remove(&output->frame.link);
+    
+    if (output->scene_output) {
+        wlr_scene_output_destroy(output->scene_output);
+    }
+    
+    free(output);
 }
 
 void output_frame_notify(struct wl_listener *listener, void *data) {
+    (void)data;
     struct mcw_output *output = wl_container_of(listener, output, frame);
-    struct wlr_output *wlr_output = data;
-    struct wlr_renderer *renderer = output->server->renderer;
     
-    struct wlr_output_state state;
-    wlr_output_state_init(&state);
-    
-    if (!wlr_output_configure_primary_swapchain(wlr_output, &state, &wlr_output->swapchain)) {
-        wlr_output_state_finish(&state);
+    // ПРОВЕРКА: если scene_output не создан, просто выходим
+    if (!output || !output->scene_output) {
+        printf("Error: output or scene_output is NULL\n");
         return;
     }
     
-    struct wlr_buffer *buffer = wlr_swapchain_acquire(wlr_output->swapchain, NULL);
-    if (!buffer) {
-        wlr_output_state_finish(&state);
-        return;
+    // Пробуем коммит
+    if (!wlr_scene_output_commit(output->scene_output, NULL)) {
+        printf("Warning: scene_output_commit failed\n");
     }
     
-    struct wlr_render_pass *pass = wlr_renderer_begin_buffer_pass(renderer, buffer, NULL);
-    
-    float color[4] = {1.0, 0, 0, 1.0};
-    wlr_render_pass_add_rect(pass, &(struct wlr_render_rect_options){
-        .box = {0, 0, wlr_output->width, wlr_output->height},
-        .color = {color[0], color[1], color[2], color[3]},
-    });
-    
-    wlr_render_pass_submit(pass);
-    wlr_output_state_set_buffer(&state, buffer);
-    wlr_output_commit_state(wlr_output, &state);
-    wlr_buffer_unlock(buffer);
-    wlr_output_state_finish(&state);
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    wlr_scene_output_send_frame_done(output->scene_output, &now);
 }
-
 
 void new_output_notify(struct wl_listener *listener, void *data) {
     struct compositor_state *server = wl_container_of(listener, server, new_output);
@@ -77,6 +68,15 @@ void new_output_notify(struct wl_listener *listener, void *data) {
         return;
     }
 
+    wlr_output_layout_add(server->output_layout, wlr_output, 0, 0);
+
+    struct wlr_scene_output *scene_output = wlr_scene_output_create(server->scene, wlr_output);
+    if (!scene_output) {
+        fprintf(stderr, "Failed to create scene output\n");
+        return;
+    }
+
+    // Настройка режима
     struct wlr_output_state state;
     wlr_output_state_init(&state);
     wlr_output_state_set_enabled(&state, true);
@@ -93,6 +93,7 @@ void new_output_notify(struct wl_listener *listener, void *data) {
     clock_gettime(CLOCK_MONOTONIC, &output->last_frame);
     output->server = server;
     output->wlr_output = wlr_output;
+    output->scene_output = scene_output;  // Сохраняем для рендеринга
     wl_list_insert(&server->outputs, &output->link);
 
     output->destroy.notify = output_destroy_notify;
@@ -100,4 +101,6 @@ void new_output_notify(struct wl_listener *listener, void *data) {
 
     output->frame.notify = output_frame_notify;
     wl_signal_add(&wlr_output->events.frame, &output->frame);
+    
+    printf("Output added: %s\n", wlr_output->name);
 }

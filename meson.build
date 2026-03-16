@@ -28,7 +28,8 @@ src_files = files(
   'src/output.c',
   'src/cursor.c',
   'src/keyboard.c',
-  'src/input.c'
+  'src/input.c',
+  'src/renderer.c'
 )
 
 executable('myexe',

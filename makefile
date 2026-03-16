@@ -9,7 +9,7 @@ build:
 	ninja -C build
 
 run:
-	build/myexe
+	WLR_LOG=debug ./build/myexe
 
 rebuild:
 	rm -rf build
@@ -25,4 +25,4 @@ rebuild_and_run:
 	meson build
 	ninja -C build
 
-	build/myexe
+	WLR_LOG=debug ./build/myexe

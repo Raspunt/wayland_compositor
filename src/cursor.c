@@ -2,25 +2,29 @@
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_scene.h> 
 #include <wlr/types/wlr_xdg_shell.h> 
+#include <wlr/util/log.h>
 
 #include "src/output.h"
 #include "src/compositor.h"
 #include "src/cursor.h"
 #include "src/edges.h"
 
-
+/* Forward declaration из renderer.c */
+void focus_toplevel(struct compositor_toplevel *toplevel);
 
 static void process_cursor_move(struct compositor_state *server) {
-	/* Move the grabbed toplevel to the new position. */
-	struct cursor_toplevel *toplevel = server->grabbed_toplevel;
+	struct compositor_toplevel *toplevel = server->grabbed_toplevel;
+	if (!toplevel) return;
+	
 	wlr_scene_node_set_position(&toplevel->scene_tree->node,
 		server->cursor->x - server->grab_x,
 		server->cursor->y - server->grab_y);
 }
 
 static void process_cursor_resize(struct compositor_state *server) {
-	/* Resizing the grabbed toplevel can be a little bit complicated... */
-	struct cursor_toplevel *toplevel = server->grabbed_toplevel;
+	struct compositor_toplevel *toplevel = server->grabbed_toplevel;
+	if (!toplevel) return;
+	
 	double border_x = server->cursor->x - server->grab_x;
 	double border_y = server->cursor->y - server->grab_y;
 	int new_left = server->grab_geobox.x;
@@ -53,35 +57,93 @@ static void process_cursor_resize(struct compositor_state *server) {
 	wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, new_width, new_height);
 }
 
-static void reset_cursor_mode(struct compositor_state *server) {
-	/* Reset the cursor mode to passthrough. */
+void reset_cursor_mode(struct compositor_state *server) {
 	server->cursor_mode = CURSOR_PASSTHROUGH;
 	server->grabbed_toplevel = NULL;
 }
 
+void begin_interactive(struct compositor_toplevel *toplevel, 
+                       enum cursor_mode mode, uint32_t edges) {
+	struct compositor_state *server = toplevel->server;
+	server->grabbed_toplevel = toplevel;
+	server->cursor_mode = mode;
+	server->resize_edges = edges;
+	
+	if (mode == CURSOR_MOVE) {
+		server->grab_x = server->cursor->x - toplevel->scene_tree->node.x;
+		server->grab_y = server->cursor->y - toplevel->scene_tree->node.y;
+	} else {
+		struct wlr_box geo_box;
+		wlr_xdg_surface_get_geometry(toplevel->xdg_toplevel->base, &geo_box);
+		
+		double border_x = (toplevel->scene_tree->node.x + geo_box.x) +
+			((edges & WLR_EDGE_RIGHT) ? geo_box.width : 0);
+		double border_y = (toplevel->scene_tree->node.y + geo_box.y) +
+			((edges & WLR_EDGE_BOTTOM) ? geo_box.height : 0);
+			
+		server->grab_x = server->cursor->x - border_x;
+		server->grab_y = server->cursor->y - border_y;
+		server->grab_geobox = geo_box;
+		server->grab_geobox.x += toplevel->scene_tree->node.x;
+		server->grab_geobox.y += toplevel->scene_tree->node.y;
+	}
+}
+
+/* ИСПРАВЛЕНО: Теперь реально ищет окно под курсором */
+struct compositor_toplevel *desktop_toplevel_at(struct compositor_state *server, 
+    double lx, double ly, struct wlr_surface **surface, double *sx, double *sy) {
+	
+	/* Ищем узел сцены под курсором */
+	struct wlr_scene_node *node = wlr_scene_node_at(
+		&server->scene->tree.node, lx, ly, sx, sy);
+	
+	if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
+		return NULL;
+	}
+	
+	struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
+	struct wlr_scene_surface *scene_surface = 
+		wlr_scene_surface_try_from_buffer(scene_buffer);
+	
+	if (!scene_surface) {
+		return NULL;
+	}
+	
+	*surface = scene_surface->surface;
+	
+	/* Ищем родительский scene_tree, у которого есть data = toplevel */
+	struct wlr_scene_tree *tree = node->parent;
+	while (tree != NULL && tree->node.data == NULL) {
+		tree = tree->node.parent;
+	}
+	
+	return tree ? tree->node.data : NULL;
+}
+
 static void process_cursor_motion(struct compositor_state *server, uint32_t time) {
-	(void)time;  /* не используется пока */
+	/* Обработка drag/resize */
 	if (server->cursor_mode == CURSOR_MOVE && server->grabbed_toplevel) {
 		process_cursor_move(server);
+		return;
 	} else if (server->cursor_mode == CURSOR_RESIZE && server->grabbed_toplevel) {
 		process_cursor_resize(server);
+		return;
 	}
-	/* TODO: иначе обновлять surface под курсором */
+	
+	/* Passthrough: отправляем движение клиенту под курсором */
+	double sx, sy;
+	struct wlr_surface *surface = NULL;
+	struct compositor_toplevel *toplevel = desktop_toplevel_at(server,
+		server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+		
+	if (surface) {
+		wlr_seat_pointer_notify_enter(server->seat, surface, sx, sy);
+		wlr_seat_pointer_notify_motion(server->seat, time, sx, sy);
+	} else {
+		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+		wlr_seat_pointer_clear_focus(server->seat);
+	}
 }
-
-/* Заглушки для недостающих функций (потом реализуете) */
-struct cursor_toplevel *desktop_toplevel_at(struct compositor_state *server, 
-    double x, double y, struct wlr_surface **surface, double *sx, double *sy) {
-	(void)server; (void)x; (void)y; (void)surface; (void)sx; (void)sy;
-	return NULL;  /* TODO: найти окно под курсором */
-}
-
-void focus_toplevel(struct cursor_toplevel *toplevel) {
-	(void)toplevel;
-	/* TODO: установить фокус на окно */
-}
-
-/* Публичные функции (вызываются из main.c) */
 
 void server_cursor_frame(struct wl_listener *listener, void *data) {
 	(void)data;
@@ -107,11 +169,15 @@ void server_cursor_button(struct wl_listener *listener, void *data) {
 	if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
 		reset_cursor_mode(server);
 	} else {
+		/* При нажатии ищем окно и фокусируем его */
 		double sx, sy;
 		struct wlr_surface *surface = NULL;
-		struct cursor_toplevel *toplevel = desktop_toplevel_at(server,
+		struct compositor_toplevel *toplevel = desktop_toplevel_at(server,
 			server->cursor->x, server->cursor->y, &surface, &sx, &sy);
-		focus_toplevel(toplevel);
+			
+		if (toplevel) {
+			focus_toplevel(toplevel);
+		}
 	}
 }
 
@@ -132,7 +198,15 @@ void server_cursor_motion_absolute(struct wl_listener *listener, void *data) {
 	process_cursor_motion(server, event->time_msec);
 }
 
-
 void server_new_pointer(struct compositor_state *server, struct wlr_input_device *device) {
 	wlr_cursor_attach_input_device(server->cursor, device);
+}
+
+void seat_request_set_cursor(struct wl_listener *listener, void *data) {
+	struct compositor_state *server =
+		wl_container_of(listener, server, request_set_cursor);
+	struct wlr_seat_pointer_request_set_cursor_event *event = data;
+
+	wlr_cursor_set_surface(server->cursor, event->surface,
+		event->hotspot_x, event->hotspot_y);
 }

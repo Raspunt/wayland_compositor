@@ -7,72 +7,90 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <wlr/util/log.h>
+#include <stdio.h>  
 
-/* Заглушка для обработки хоткеев (Alt+F4 и т.д.) */
 static bool handle_keybinding(struct compositor_state *server, uint32_t modifiers, xkb_keysym_t sym) {
-	/* Win/Super + Enter - запуск alacritty */
-	if ((modifiers & WLR_MODIFIER_LOGO) && sym == XKB_KEY_Return) {
+	printf("key has been pressed: modifiers=%u, sym=%u\n", modifiers, sym);
+	fflush(stdout);
+
+	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_Return) {
+		printf("HOTKEY: Alt+Enter detected, launching terminal...\n");
+		fflush(stdout);
+		
 		pid_t pid = fork();
 		if (pid == 0) {
-			/* Дочерний процесс */
+			setsid();
+			
 			execlp("alacritty", "alacritty", NULL);
-			_exit(1);  /* Если execlp не сработал */
+			
+			perror("Failed to launch terminal");
+			_exit(1);
 		} else if (pid < 0) {
-			wlr_log(WLR_ERROR, "Failed to fork for alacritty");
+			wlr_log(WLR_ERROR, "Failed to fork for terminal");
+			printf("ERROR: fork failed\n");
+		} else {
+			printf("Terminal launched with PID %d\n", pid);
 		}
 		return true;
 	}
 	
-	/* Ctrl + Escape - выход из compositor (смерть) */
-	if ((modifiers & WLR_MODIFIER_CTRL) && sym == XKB_KEY_Escape) {
-		wlr_log(WLR_INFO, "Ctrl+Escape pressed, terminating compositor...");
-		exit(0);
-		// wl_display_terminate(server->wl_display);
+	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_Escape) {
+		printf("HOTKEY: Alt+Escape pressed, terminating compositor...\n");
+		wl_display_terminate(server->wl_display);
 		return true;
 	}
 	
 	return false;
 }
-/* Обработчики событий клавиатуры (static - только для этого файла) */
 
 static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) {
 	(void)data;
-	/* Этот код вызывается при нажатии модификаторов (Shift, Ctrl, Alt) */
 	struct compositor_keyboard *keyboard = wl_container_of(listener, keyboard, modifiers);
 	
-	/* Устанавливаем текущую клавиатуру для seat */
 	wlr_seat_set_keyboard(keyboard->server->seat, keyboard->wlr_keyboard);
-	/* Отправляем модификаторы клиенту с фокусом */
 	wlr_seat_keyboard_notify_modifiers(keyboard->server->seat,
 		&keyboard->wlr_keyboard->modifiers);
 }
 
 static void keyboard_handle_key(struct wl_listener *listener, void *data) {
-	/* Этот код вызывается при нажатии/отпускании клавиши */
 	struct compositor_keyboard *keyboard = wl_container_of(listener, keyboard, key);
-	struct compositor_state *server = keyboard->server;  /* Исправлено с tinywl_server */
+	struct compositor_state *server = keyboard->server;
 	struct wlr_keyboard_key_event *event = data;
 	struct wlr_seat *seat = server->seat;
 
-	/* Переводим keycode libinput -> xkbcommon */
+	/* Обрабатываем только нажатие (не отпускание) */
+	if (event->state != WL_KEYBOARD_KEY_STATE_PRESSED) {
+		wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
+		wlr_seat_keyboard_notify_key(seat, event->time_msec,
+			event->keycode, event->state);
+		return;
+	}
+
 	uint32_t keycode = event->keycode + 8;
-	/* Получаем список keysym по keymap этой клавиатуры */
 	const xkb_keysym_t *syms;
 	int nsyms = xkb_state_key_get_syms(
 			keyboard->wlr_keyboard->xkb_state, keycode, &syms);
 
-	bool handled = false;
 	uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
-	if ((modifiers & WLR_MODIFIER_ALT) &&
-			event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-		/* Если Alt зажат и кнопка нажата - проверяем хоткеи compositor'а */
-		for (int i = 0; i < nsyms; i++) {
-			handled = handle_keybinding(server, modifiers, syms[i]);
+	
+	/* ОТЛАДКА: показываем что нажато */
+	printf("Key: code=%d, mods=%d (ALT=%d), syms=%d\n", 
+	       keycode, modifiers, 
+	       (modifiers & WLR_MODIFIER_ALT) ? 1 : 0,
+	       nsyms);
+	
+	bool handled = false;
+	for (int i = 0; i < nsyms; i++) {
+		printf("  sym[%d]=%d (Return=%d, Escape=%d)\n", 
+		       i, syms[i], XKB_KEY_Return, XKB_KEY_Escape);
+		handled = handle_keybinding(server, modifiers, syms[i]);
+		if (handled) {
+			printf("  -> handled by compositor\n");
+			break;
 		}
 	}
 
 	if (!handled) {
-		/* Иначе передаем клиенту */
 		wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
 		wlr_seat_keyboard_notify_key(seat, event->time_msec,
 			event->keycode, event->state);
@@ -81,7 +99,6 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 
 static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
 	(void)data;
-	/* Вызывается при отключении клавиатуры (USB unplug) */
 	struct compositor_keyboard *keyboard = wl_container_of(listener, keyboard, destroy);
 	
 	wl_list_remove(&keyboard->modifiers.link);
@@ -90,8 +107,6 @@ static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&keyboard->link);
 	free(keyboard);
 }
-
-/* Публичная функция (без static - вызывается из input.c или main.c) */
 
 void server_new_keyboard(struct compositor_state *server,
 		struct wlr_input_device *device) {
@@ -123,4 +138,6 @@ void server_new_keyboard(struct compositor_state *server,
 
 	/* Добавляем в список клавиатур */
 	wl_list_insert(&server->keyboards, &keyboard->link);
+	
+	printf("Keyboard added\n");
 }
