@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <unistd.h> 
-#include <wayland-server-core.h>  // Для wl_display_create
+#include <wayland-server-core.h>
 
 #include <wlr/version.h>
 #include <wlr/backend.h>
@@ -15,9 +15,9 @@
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_scene.h>  
-#include <wlr/types/wlr_data_device.h>  
-#include <wlr/types/wlr_compositor.h>      // Добавлено!
-#include <wlr/types/wlr_subcompositor.h>   // Добавлено!
+#include <wlr/types/wlr_data_device.h>
+#include <wlr/types/wlr_compositor.h>
+#include <wlr/types/wlr_subcompositor.h>
 
 #include "src/output.h"
 #include "src/input.h"   
@@ -35,7 +35,7 @@ int main(void) {
     cs.wl_event_loop = wl_display_get_event_loop(cs.wl_display);
     assert(cs.wl_event_loop);
 
-    // КРИТИЧНО: Создаем сессию перед backend
+    // Создаем сессию перед backend
     cs.wlr_session = wlr_session_create(cs.wl_event_loop);
     assert(cs.wlr_session);
     
@@ -54,7 +54,7 @@ int main(void) {
     cs.request_set_cursor.notify = seat_request_set_cursor;
     wl_signal_add(&cs.seat->events.request_set_cursor, &cs.request_set_cursor);
 
-    // КРИТИЧНО: Создаем сцену и привязываем к output layout
+    // Создаем сцену и привязываем к output layout
     cs.scene = wlr_scene_create();
     assert(cs.scene);
     cs.scene_layout = wlr_scene_attach_output_layout(cs.scene, cs.output_layout);
@@ -63,7 +63,7 @@ int main(void) {
     wl_list_init(&cs.outputs);
     wl_list_init(&cs.toplevels);
 
-    // КРИТИЧНО: Регистрируем глобальные интерфейсы Wayland ДО старта backend
+    // Регистрируем глобальные интерфейсы Wayland ДО старта backend
     wlr_renderer_init_wl_display(cs.renderer, cs.wl_display);
     wlr_compositor_create(cs.wl_display, 6, cs.renderer);
     wlr_subcompositor_create(cs.wl_display);
@@ -78,11 +78,8 @@ int main(void) {
     cs.cursor_mgr = wlr_xcursor_manager_create(NULL, 24);
     wlr_xcursor_manager_load(cs.cursor_mgr, 1);
     
-    // ИСПРАВЛЕНО: Передаем cursor_mgr вместо NULL
     wlr_cursor_set_xcursor(cs.cursor, cs.cursor_mgr, "default");
 
-    // Предполагается, что CURSOR_PASSTHROUGH = 0 определен в input.h
-    // Если нет - замените на: cs.cursor_mode = 0;
     cs.cursor_mode = CURSOR_PASSTHROUGH;
     
     cs.cursor_motion.notify = server_cursor_motion;
@@ -132,7 +129,7 @@ int main(void) {
     wl_display_destroy_clients(cs.wl_display);
 
     // Очистка
-    wl_list_remove(&cs.request_set_cursor.link);  // Добавлена очистка
+    wl_list_remove(&cs.request_set_cursor.link);
     wl_list_remove(&cs.new_xdg_toplevel.link);
     wl_list_remove(&cs.new_xdg_popup.link);
     wl_list_remove(&cs.cursor_motion.link);

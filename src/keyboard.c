@@ -10,32 +10,20 @@
 #include <stdio.h>  
 
 static bool handle_keybinding(struct compositor_state *server, uint32_t modifiers, xkb_keysym_t sym) {
-	printf("key has been pressed: modifiers=%u, sym=%u\n", modifiers, sym);
-	fflush(stdout);
-
 	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_Return) {
-		printf("HOTKEY: Alt+Enter detected, launching terminal...\n");
-		fflush(stdout);
-		
 		pid_t pid = fork();
 		if (pid == 0) {
 			setsid();
-			
 			execlp("alacritty", "alacritty", NULL);
-			
 			perror("Failed to launch terminal");
 			_exit(1);
 		} else if (pid < 0) {
 			wlr_log(WLR_ERROR, "Failed to fork for terminal");
-			printf("ERROR: fork failed\n");
-		} else {
-			printf("Terminal launched with PID %d\n", pid);
 		}
 		return true;
 	}
 	
 	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_Escape) {
-		printf("HOTKEY: Alt+Escape pressed, terminating compositor...\n");
 		wl_display_terminate(server->wl_display);
 		return true;
 	}
@@ -53,60 +41,32 @@ static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) 
 }
 
 static void keyboard_handle_key(struct wl_listener *listener, void *data) {
-    struct compositor_keyboard *keyboard = wl_container_of(listener, keyboard, key);
-    struct compositor_state *server = keyboard->server;
-    struct wlr_keyboard_key_event *event = data;
-    struct wlr_seat *seat = server->seat;
+	struct compositor_keyboard *keyboard = wl_container_of(listener, keyboard, key);
+	struct compositor_state *server = keyboard->server;
+	struct wlr_keyboard_key_event *event = data;
+	struct wlr_seat *seat = server->seat;
 
-    /* Получаем keycode и keysyms */
-    uint32_t keycode = event->keycode + 8;
-    const xkb_keysym_t *syms;
-    int nsyms = xkb_state_key_get_syms(keyboard->wlr_keyboard->xkb_state, keycode, &syms);
+	uint32_t keycode = event->keycode + 8;
+	const xkb_keysym_t *syms;
+	int nsyms = xkb_state_key_get_syms(keyboard->wlr_keyboard->xkb_state, keycode, &syms);
 
-    bool handled = false;
-    
-    /* Обрабатываем keybindings ТОЛЬКО при нажатии (PRESS) и с модификатором Alt */
-    if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-        uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
-        
-        /* Отладка */
-        printf("Key PRESS: code=%d, mods=%d (ALT=%d), syms=%d\n", 
-               keycode, modifiers, 
-               (modifiers & WLR_MODIFIER_ALT) ? 1 : 0,
-               nsyms);
-        
-        if (modifiers & WLR_MODIFIER_ALT) {
-            for (int i = 0; i < nsyms; i++) {
-                printf("  Checking sym[%d]=%d\n", i, syms[i]);
-                handled = handle_keybinding(server, modifiers, syms[i]);
-                if (handled) {
-                    printf("  -> handled by compositor (keybinding)\n");
-                    break;
-                }
-            }
-        }
-    }
+	bool handled = false;
 
-    /* Если не обработано как keybinding, передаем клиенту */
-    if (!handled) {
-        /* Устанавливаем эту клавиатуру как активную для seat */
-        wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
-        
-        /* Отладка: проверяем, есть ли фокус */
-        struct wlr_surface *focused = seat->keyboard_state.focused_surface;
-        printf("  -> sending to client, focused_surface=%p\n", (void*)focused);
-        
-        if (focused == NULL) {
-            printf("  WARNING: No focused surface! Click on window to focus.\n");
-        }
-        
-        /* Отправляем событие клиенту (и PRESS, и RELEASE) */
-        wlr_seat_keyboard_notify_key(seat, event->time_msec,
-            event->keycode, event->state);
-    } else {
-        /* Обработано как keybinding - не отправляем клиенту ни PRESS, ни RELEASE */
-        printf("  -> keybinding consumed event, not sending to client\n");
-    }
+	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
+		if (modifiers & WLR_MODIFIER_ALT) {
+			for (int i = 0; i < nsyms; i++) {
+				handled = handle_keybinding(server, modifiers, syms[i]);
+				if (handled) break;
+			}
+		}
+	}
+
+	if (!handled) {
+		wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
+		wlr_seat_keyboard_notify_key(seat, event->time_msec,
+			event->keycode, event->state);
+	}
 }
 
 static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {

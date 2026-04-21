@@ -3,13 +3,12 @@
 #include <wlr/types/wlr_scene.h> 
 #include <wlr/types/wlr_xdg_shell.h> 
 #include <wlr/util/log.h>
+#include <wlr/util/edges.h>
 
 #include "src/output.h"
 #include "src/compositor.h"
 #include "src/cursor.h"
-#include "src/edges.h"
 
-/* Forward declaration из renderer.c */
 void focus_toplevel(struct compositor_toplevel *toplevel);
 
 static void process_cursor_move(struct compositor_state *server) {
@@ -133,7 +132,7 @@ static void process_cursor_motion(struct compositor_state *server, uint32_t time
 	/* Passthrough: отправляем движение клиенту под курсором */
 	double sx, sy;
 	struct wlr_surface *surface = NULL;
-	struct compositor_toplevel *toplevel = desktop_toplevel_at(server,
+	desktop_toplevel_at(server,
 		server->cursor->x, server->cursor->y, &surface, &sx, &sy);
 		
 	if (surface) {
@@ -206,6 +205,11 @@ void seat_request_set_cursor(struct wl_listener *listener, void *data) {
 	struct compositor_state *server =
 		wl_container_of(listener, server, request_set_cursor);
 	struct wlr_seat_pointer_request_set_cursor_event *event = data;
+
+	struct wlr_seat_client *focused = server->seat->pointer_state.focused_client;
+	if (focused != event->seat_client) {
+		return;
+	}
 
 	wlr_cursor_set_surface(server->cursor, event->surface,
 		event->hotspot_x, event->hotspot_y);

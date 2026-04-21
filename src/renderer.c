@@ -167,7 +167,7 @@ void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
     (void)data;
     struct compositor_toplevel *toplevel = wl_container_of(listener, toplevel, commit);
     
-    // КРИТИЧНО: На первом коммите отправляем configure, иначе клиент зависнет
+    // На первом коммите отправляем configure
     if (toplevel->xdg_toplevel->base->initial_commit) {
         wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, 0, 0);
     }

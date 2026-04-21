@@ -32,6 +32,8 @@ void output_destroy_notify(struct wl_listener *listener, void *data) {
     wl_list_remove(&output->destroy.link);
     wl_list_remove(&output->frame.link);
     
+    wlr_output_layout_remove(output->server->output_layout, output->wlr_output);
+    
     if (output->scene_output) {
         wlr_scene_output_destroy(output->scene_output);
     }
@@ -90,7 +92,6 @@ void new_output_notify(struct wl_listener *listener, void *data) {
     wlr_output_state_finish(&state);
 
     struct mcw_output *output = calloc(1, sizeof(struct mcw_output));
-    clock_gettime(CLOCK_MONOTONIC, &output->last_frame);
     output->server = server;
     output->wlr_output = wlr_output;
     output->scene_output = scene_output;  // Сохраняем для рендеринга

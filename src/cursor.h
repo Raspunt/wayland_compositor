@@ -11,22 +11,6 @@ enum cursor_mode {
 struct compositor_state;
 struct wlr_input_device;
 
-struct cursor_toplevel {
-	struct wl_list link;
-	struct compositor_state *server;
-	struct wlr_xdg_toplevel *xdg_toplevel;
-	struct wlr_scene_tree *scene_tree;
-	struct wl_listener map;
-	struct wl_listener unmap;
-	struct wl_listener commit;
-	struct wl_listener destroy;
-	struct wl_listener request_move;
-	struct wl_listener request_resize;
-	struct wl_listener request_maximize;
-	struct wl_listener request_fullscreen;
-};
-
-
 void server_cursor_motion_absolute(struct wl_listener *listener, void *data);
 void server_cursor_motion(struct wl_listener *listener, void *data);
 void server_cursor_button(struct wl_listener *listener, void *data);

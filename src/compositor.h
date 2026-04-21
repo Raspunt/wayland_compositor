@@ -10,7 +10,6 @@ struct compositor_state {
     struct wlr_renderer *renderer;
     struct wlr_allocator *allocator;
     
-    // Сцена (добавь обязательно!)
     struct wlr_scene *scene;
     struct wlr_scene_output_layout *scene_layout;
     
@@ -19,9 +18,7 @@ struct compositor_state {
     struct wlr_output_layout *output_layout;
     struct wlr_seat *seat;
     
-    // Seat listeners (добавь!)
     struct wl_listener request_set_cursor;
-    struct wl_listener request_set_selection;
 
     struct wlr_xdg_shell *xdg_shell;
     struct wl_listener new_xdg_toplevel;

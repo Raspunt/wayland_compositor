@@ -20,7 +20,7 @@ void server_new_input(struct wl_listener *listener, void *data) {
         break;
     }
 
-    /* КРИТИЧНО: Обновляем capabilities seat'а! */
+    /* Обновляем capabilities seat'а */
     uint32_t caps = WL_SEAT_CAPABILITY_POINTER;
     if (!wl_list_empty(&server->keyboards)) {
         caps |= WL_SEAT_CAPABILITY_KEYBOARD;
