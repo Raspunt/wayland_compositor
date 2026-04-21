@@ -1,27 +1,43 @@
+#define _POSIX_C_SOURCE 200809L
 #include "src/compositor.h"
+
+extern char **environ;
 #include "src/keyboard.h"
+#include "src/cursor.h"
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_seat.h>
 #include <xkbcommon/xkbcommon.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <spawn.h>
 #include <wlr/util/log.h>
 #include <stdio.h>  
 
 static bool handle_keybinding(struct compositor_state *server, uint32_t modifiers, xkb_keysym_t sym) {
+	/* Аварийный сброс grab (полезно в nested mode если потерялся button release) */
+	if (sym == XKB_KEY_Escape && server->cursor_mode != CURSOR_PASSTHROUGH) {
+		reset_cursor_mode(server);
+		return true;
+	}
+
 	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_Return) {
-		pid_t pid = fork();
-		if (pid == 0) {
-			setsid();
-			execlp("alacritty", "alacritty", NULL);
-			perror("Failed to launch terminal");
-			_exit(1);
-		} else if (pid < 0) {
-			wlr_log(WLR_ERROR, "Failed to fork for terminal");
+		pid_t pid;
+		char *argv[] = {"alacritty", NULL};
+		if (posix_spawnp(&pid, "alacritty", NULL, NULL, argv, environ) != 0) {
+			wlr_log(WLR_ERROR, "Failed to spawn alacritty");
 		}
 		return true;
 	}
+	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_D) {
+		pid_t pid;
+		char *argv[] = {"fuzzel", NULL};
+		if (posix_spawnp(&pid, "fuzzel", NULL, NULL, argv, environ) != 0) {
+			wlr_log(WLR_ERROR, "Failed to spawn fuzzel");
+		}
+		return true;
+	}
+
 	
 	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_Escape) {
 		wl_display_terminate(server->wl_display);

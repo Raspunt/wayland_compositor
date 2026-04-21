@@ -23,19 +23,27 @@ xdg_shell_h = custom_target(
     command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@']
 )
 
+layer_shell_h = custom_target(
+    'wlr-layer-shell-protocol',
+    output: 'wlr-layer-shell-unstable-v1-protocol.h',
+    input: 'protocols/wlr-layer-shell-unstable-v1.xml',
+    command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@']
+)
+
 src_files = files(
   'src/main.c',
   'src/output.c',
   'src/cursor.c',
   'src/keyboard.c',
   'src/input.c',
-  'src/renderer.c'
+  'src/renderer.c',
+  'src/layer_shell.c'
 )
 
 executable('myexe',
-  src_files, xdg_shell_h,
-  include_directories: include_directories('src', '.'),
-  dependencies: [wlroots, wayland_server, xkbcommon],  # <-- добавлен xkbcommon
+  src_files, xdg_shell_h, layer_shell_h,
+  include_directories: include_directories('src', '.', 'build'),
+  dependencies: [wlroots, wayland_server, xkbcommon],
   c_args: ['-DWLR_USE_UNSTABLE'],
   install: true
 )

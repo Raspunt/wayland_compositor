@@ -48,4 +48,7 @@ void xdg_toplevel_request_resize(struct wl_listener *listener, void *data);
 void xdg_toplevel_request_maximize(struct wl_listener *listener, void *data);
 void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *data);
 
+void xdg_popup_commit(struct wl_listener *listener, void *data);
+void xdg_popup_destroy(struct wl_listener *listener, void *data);
+
 #endif

@@ -59,6 +59,7 @@ static void process_cursor_resize(struct compositor_state *server) {
 void reset_cursor_mode(struct compositor_state *server) {
 	server->cursor_mode = CURSOR_PASSTHROUGH;
 	server->grabbed_toplevel = NULL;
+	server->grab_button = 0;
 }
 
 void begin_interactive(struct compositor_toplevel *toplevel, 
@@ -166,9 +167,13 @@ void server_cursor_button(struct wl_listener *listener, void *data) {
 		event->time_msec, event->button, event->state);
 		
 	if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
-		reset_cursor_mode(server);
+		if (server->cursor_mode != CURSOR_PASSTHROUGH) {
+			reset_cursor_mode(server);
+		}
 	} else {
-		/* При нажатии ищем окно и фокусируем его */
+		if (server->cursor_mode == CURSOR_PASSTHROUGH) {
+			server->grab_button = event->button;
+		}
 		double sx, sy;
 		struct wlr_surface *surface = NULL;
 		struct compositor_toplevel *toplevel = desktop_toplevel_at(server,

@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
+#include <signal.h>
 #include <unistd.h> 
 #include <wayland-server-core.h>
 
@@ -18,52 +18,112 @@
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_subcompositor.h>
+#include <wlr/types/wlr_layer_shell_v1.h>
 
 #include "src/output.h"
 #include "src/input.h"   
 #include "src/compositor.h"
 #include "src/renderer.h"
+#include "src/layer_shell.h"
+
+static int handle_signal(int sig, void *data) {
+    (void)sig;
+    struct wl_display *display = data;
+    wl_display_terminate(display);
+    return 0;
+}
 
 int main(void) {
     printf("Hello wlroots %s\n", WLR_VERSION_STR);
 
+    signal(SIGCHLD, SIG_IGN);
+
     struct compositor_state cs = {0};  
+    struct wl_event_source *sigint = NULL;
+    struct wl_event_source *sigterm = NULL;
+
+    // Инициализируем listeners, чтобы wl_list_remove был безопасен при cleanup
+    wl_list_init(&cs.request_set_cursor.link);
+    wl_list_init(&cs.new_xdg_toplevel.link);
+    wl_list_init(&cs.new_xdg_popup.link);
+    wl_list_init(&cs.cursor_motion.link);
+    wl_list_init(&cs.cursor_motion_absolute.link);
+    wl_list_init(&cs.cursor_button.link);
+    wl_list_init(&cs.cursor_axis.link);
+    wl_list_init(&cs.cursor_frame.link);
+    wl_list_init(&cs.new_input.link);
+    wl_list_init(&cs.new_output.link);
+    wl_list_init(&cs.new_layer_surface.link);
 
     cs.wl_display = wl_display_create();
-    assert(cs.wl_display);
+    if (!cs.wl_display) {
+        fprintf(stderr, "Failed to create Wayland display\n");
+        return 1;
+    }
     
     cs.wl_event_loop = wl_display_get_event_loop(cs.wl_display);
-    assert(cs.wl_event_loop);
+    if (!cs.wl_event_loop) {
+        fprintf(stderr, "Failed to get event loop\n");
+        goto cleanup;
+    }
 
-    // Создаем сессию перед backend
+    // Сессия нужна только для DRM backend; для nested (X11/Wayland) может быть NULL
     cs.wlr_session = wlr_session_create(cs.wl_event_loop);
-    assert(cs.wlr_session);
     
     cs.backend = wlr_backend_autocreate(cs.wl_event_loop, &cs.wlr_session);
-    assert(cs.backend);
+    if (!cs.backend) {
+        fprintf(stderr, "Failed to create backend\n");
+        goto cleanup;
+    }
 
     cs.renderer = wlr_renderer_autocreate(cs.backend);
-    assert(cs.renderer);
+    if (!cs.renderer) {
+        fprintf(stderr, "Failed to create renderer\n");
+        goto cleanup;
+    }
     
     cs.allocator = wlr_allocator_autocreate(cs.backend, cs.renderer);
-    assert(cs.allocator);
+    if (!cs.allocator) {
+        fprintf(stderr, "Failed to create allocator\n");
+        goto cleanup;
+    }
 
     cs.output_layout = wlr_output_layout_create(cs.wl_display);
+    if (!cs.output_layout) {
+        fprintf(stderr, "Failed to create output layout\n");
+        goto cleanup;
+    }
+    
     cs.seat = wlr_seat_create(cs.wl_display, "seat0");
+    if (!cs.seat) {
+        fprintf(stderr, "Failed to create seat\n");
+        goto cleanup;
+    }
 
     cs.request_set_cursor.notify = seat_request_set_cursor;
     wl_signal_add(&cs.seat->events.request_set_cursor, &cs.request_set_cursor);
 
-    // Создаем сцену и привязываем к output layout
     cs.scene = wlr_scene_create();
-    assert(cs.scene);
+    if (!cs.scene) {
+        fprintf(stderr, "Failed to create scene\n");
+        goto cleanup;
+    }
+    
+    cs.layer_background = wlr_scene_tree_create(&cs.scene->tree);
+    cs.layer_bottom = wlr_scene_tree_create(&cs.scene->tree);
+    cs.xdg_tree = wlr_scene_tree_create(&cs.scene->tree);
+    cs.layer_top = wlr_scene_tree_create(&cs.scene->tree);
+    cs.layer_overlay = wlr_scene_tree_create(&cs.scene->tree);
+    
     cs.scene_layout = wlr_scene_attach_output_layout(cs.scene, cs.output_layout);
-    assert(cs.scene_layout);
+    if (!cs.scene_layout) {
+        fprintf(stderr, "Failed to attach output layout to scene\n");
+        goto cleanup;
+    }
 
     wl_list_init(&cs.outputs);
     wl_list_init(&cs.toplevels);
 
-    // Регистрируем глобальные интерфейсы Wayland ДО старта backend
     wlr_renderer_init_wl_display(cs.renderer, cs.wl_display);
     wlr_compositor_create(cs.wl_display, 6, cs.renderer);
     wlr_subcompositor_create(cs.wl_display);
@@ -73,11 +133,20 @@ int main(void) {
     wl_signal_add(&cs.backend->events.new_output, &cs.new_output);
 
     cs.cursor = wlr_cursor_create();
+    if (!cs.cursor) {
+        fprintf(stderr, "Failed to create cursor\n");
+        goto cleanup;
+    }
+    
     wlr_cursor_attach_output_layout(cs.cursor, cs.output_layout);
     
     cs.cursor_mgr = wlr_xcursor_manager_create(NULL, 24);
-    wlr_xcursor_manager_load(cs.cursor_mgr, 1);
+    if (!cs.cursor_mgr) {
+        fprintf(stderr, "Failed to create cursor manager\n");
+        goto cleanup;
+    }
     
+    wlr_xcursor_manager_load(cs.cursor_mgr, 1);
     wlr_cursor_set_xcursor(cs.cursor, cs.cursor_mgr, "default");
 
     cs.cursor_mode = CURSOR_PASSTHROUGH;
@@ -103,32 +172,61 @@ int main(void) {
     wl_signal_add(&cs.backend->events.new_input, &cs.new_input);
 
     cs.xdg_shell = wlr_xdg_shell_create(cs.wl_display, 3);
+    if (!cs.xdg_shell) {
+        fprintf(stderr, "Failed to create xdg shell\n");
+        goto cleanup;
+    }
+    
     cs.new_xdg_toplevel.notify = server_new_xdg_toplevel;
     wl_signal_add(&cs.xdg_shell->events.new_toplevel, &cs.new_xdg_toplevel);
     cs.new_xdg_popup.notify = server_new_xdg_popup;
     wl_signal_add(&cs.xdg_shell->events.new_popup, &cs.new_xdg_popup);
 
+    cs.layer_shell = wlr_layer_shell_v1_create(cs.wl_display, 4);
+    if (!cs.layer_shell) {
+        fprintf(stderr, "Failed to create layer shell\n");
+        goto cleanup;
+    }
+    cs.new_layer_surface.notify = server_new_layer_surface;
+    wl_signal_add(&cs.layer_shell->events.new_surface, &cs.new_layer_surface);
+
+    sigint = wl_event_loop_add_signal(cs.wl_event_loop, SIGINT, handle_signal, cs.wl_display);
+    sigterm = wl_event_loop_add_signal(cs.wl_event_loop, SIGTERM, handle_signal, cs.wl_display);
+
     if (!wlr_backend_start(cs.backend)) {
         fprintf(stderr, "Failed to start backend\n");
-        wl_display_destroy(cs.wl_display);
-        return 1;
+        goto cleanup;
     }
 
     const char *socket = wl_display_add_socket_auto(cs.wl_display);
     if (!socket) {
-        wlr_backend_destroy(cs.backend);
-        return 1;
+        fprintf(stderr, "Failed to add socket\n");
+        goto cleanup;
     }
 
     setenv("WAYLAND_DISPLAY", socket, true);
+    
+    // Экспортируем WAYLAND_DISPLAY в systemd и dbus сессии
+    // чтобы программы, запущенные вне compositor'а, знали куда подключаться
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp("systemctl", "systemctl", "--user", "import-environment", "WAYLAND_DISPLAY", NULL);
+        _exit(0);
+    }
+    pid = fork();
+    if (pid == 0) {
+        execlp("dbus-update-activation-environment", "dbus-update-activation-environment", "--systemd", "WAYLAND_DISPLAY", NULL);
+        _exit(0);
+    }
+    
     printf("Compositor running on WAYLAND_DISPLAY=%s\n", socket);
     printf("Press Alt+Enter for terminal, Alt+Esc to exit\n");
 
     wl_display_run(cs.wl_display);
     
+cleanup:
     wl_display_destroy_clients(cs.wl_display);
 
-    // Очистка
     wl_list_remove(&cs.request_set_cursor.link);
     wl_list_remove(&cs.new_xdg_toplevel.link);
     wl_list_remove(&cs.new_xdg_popup.link);
@@ -139,13 +237,20 @@ int main(void) {
     wl_list_remove(&cs.cursor_frame.link);
     wl_list_remove(&cs.new_input.link);
     wl_list_remove(&cs.new_output.link);
+    wl_list_remove(&cs.new_layer_surface.link);
 
-    wlr_scene_node_destroy(&cs.scene->tree.node);
-    wlr_xcursor_manager_destroy(cs.cursor_mgr);
-    wlr_cursor_destroy(cs.cursor);
-    wlr_allocator_destroy(cs.allocator);
-    wlr_renderer_destroy(cs.renderer);
-    wlr_backend_destroy(cs.backend);
+    if (sigint) wl_event_source_remove(sigint);
+    if (sigterm) wl_event_source_remove(sigterm);
+    
+    if (cs.scene) wlr_scene_node_destroy(&cs.scene->tree.node);
+    if (cs.cursor_mgr) wlr_xcursor_manager_destroy(cs.cursor_mgr);
+    if (cs.cursor) wlr_cursor_destroy(cs.cursor);
+    if (cs.allocator) wlr_allocator_destroy(cs.allocator);
+    if (cs.renderer) wlr_renderer_destroy(cs.renderer);
+    if (cs.backend) wlr_backend_destroy(cs.backend);
+    if (cs.output_layout) wlr_output_layout_destroy(cs.output_layout);
+    if (cs.seat) wlr_seat_destroy(cs.seat);
+    if (cs.wlr_session) wlr_session_destroy(cs.wlr_session);
     wl_display_destroy(cs.wl_display);
     
     return 0;

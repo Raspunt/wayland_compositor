@@ -70,7 +70,11 @@ void new_output_notify(struct wl_listener *listener, void *data) {
         return;
     }
 
-    wlr_output_layout_add(server->output_layout, wlr_output, 0, 0);
+    struct wlr_output_layout_output *layout_output = wlr_output_layout_add_auto(server->output_layout, wlr_output);
+    if (!layout_output) {
+        fprintf(stderr, "Failed to add output to layout\n");
+        return;
+    }
 
     struct wlr_scene_output *scene_output = wlr_scene_output_create(server->scene, wlr_output);
     if (!scene_output) {
@@ -78,14 +82,37 @@ void new_output_notify(struct wl_listener *listener, void *data) {
         return;
     }
 
+    wlr_scene_output_layout_add_output(server->scene_layout, layout_output, scene_output);
+
     // Настройка режима
     struct wlr_output_state state;
     wlr_output_state_init(&state);
     wlr_output_state_set_enabled(&state, true);
 
-    if (!wl_list_empty(&wlr_output->modes)) {
-        struct wlr_output_mode *mode = wl_container_of(wlr_output->modes.prev, mode, link);
+    struct wlr_output_mode *mode = NULL;
+    struct wlr_output_mode *m;
+    printf("Output %s available modes:\n", wlr_output->name);
+    wl_list_for_each(m, &wlr_output->modes, link) {
+        printf("  %dx%d @ %d Hz (preferred=%d)\n",
+            m->width, m->height, m->refresh / 1000, m->preferred);
+        if (m->width == 1920 && m->height == 1080) {
+            mode = m;
+        }
+    }
+    
+    if (mode) {
+        printf("Output %s: selecting 1920x1080 @ %d Hz\n", wlr_output->name, mode->refresh / 1000);
         wlr_output_state_set_mode(&state, mode);
+    } else if (!wl_list_empty(&wlr_output->modes)) {
+        mode = wlr_output_preferred_mode(wlr_output);
+        if (mode) {
+            printf("Output %s: selecting preferred mode %dx%d @ %d Hz\n",
+                wlr_output->name, mode->width, mode->height, mode->refresh / 1000);
+            wlr_output_state_set_mode(&state, mode);
+        }
+    } else {
+        printf("Output %s: no modes, trying custom 1920x1080\n", wlr_output->name);
+        wlr_output_state_set_custom_mode(&state, 1920, 1080, 0);
     }
 
     wlr_output_commit_state(wlr_output, &state);
@@ -105,3 +132,6 @@ void new_output_notify(struct wl_listener *listener, void *data) {
     
     printf("Output added: %s\n", wlr_output->name);
 }
+
+
+

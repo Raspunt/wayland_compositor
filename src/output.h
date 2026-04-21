@@ -19,6 +19,7 @@ struct mcw_output {
     struct wl_list link;
 };
 
+void output_detect_monitors(struct compositor_state *server);
 void output_destroy_notify(struct wl_listener *listener, void *data);
 void output_frame_notify(struct wl_listener *listener, void *data);
 void new_output_notify(struct wl_listener *listener, void *data);

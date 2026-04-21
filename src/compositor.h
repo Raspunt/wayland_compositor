@@ -1,6 +1,11 @@
+#ifndef COMPOSITOR_H
+#define COMPOSITOR_H
+
 #include "src/output.h"
 #include "src/cursor.h"
 #include "src/renderer.h"
+
+struct wlr_layer_shell_v1;
 
 struct compositor_state {
     struct wl_display *wl_display;
@@ -12,6 +17,12 @@ struct compositor_state {
     
     struct wlr_scene *scene;
     struct wlr_scene_output_layout *scene_layout;
+    
+    struct wlr_scene_tree *layer_background;
+    struct wlr_scene_tree *layer_bottom;
+    struct wlr_scene_tree *xdg_tree;
+    struct wlr_scene_tree *layer_top;
+    struct wlr_scene_tree *layer_overlay;
     
     struct wl_listener new_output;
     struct wl_list outputs; 
@@ -25,6 +36,9 @@ struct compositor_state {
     struct wl_listener new_xdg_popup;
     struct wl_list toplevels;
 
+    struct wlr_layer_shell_v1 *layer_shell;
+    struct wl_listener new_layer_surface;
+
     struct wlr_cursor *cursor;
     struct wlr_xcursor_manager *cursor_mgr;
     struct wl_listener cursor_motion;
@@ -37,8 +51,11 @@ struct compositor_state {
     struct compositor_toplevel *grabbed_toplevel;  
     struct wlr_box grab_geobox;
     uint32_t resize_edges;
+    uint32_t grab_button;
     double grab_x, grab_y;
 
     struct wl_list keyboards;
     struct wl_listener new_input;
 };
+
+#endif

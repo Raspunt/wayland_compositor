@@ -22,8 +22,8 @@ void xdg_toplevel_request_resize(struct wl_listener *listener, void *data);
 void xdg_toplevel_request_maximize(struct wl_listener *listener, void *data);
 void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *data);
 
-static void xdg_popup_commit(struct wl_listener *listener, void *data);
-static void xdg_popup_destroy(struct wl_listener *listener, void *data);
+void xdg_popup_commit(struct wl_listener *listener, void *data);
+void xdg_popup_destroy(struct wl_listener *listener, void *data);
 
 void focus_toplevel(struct compositor_toplevel *toplevel) {
     if (toplevel == NULL) {
@@ -75,7 +75,7 @@ void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
     toplevel->server = server;
     toplevel->xdg_toplevel = xdg_toplevel;
     toplevel->scene_tree =
-        wlr_scene_xdg_surface_create(&server->scene->tree, xdg_toplevel->base);
+        wlr_scene_xdg_surface_create(server->xdg_tree, xdg_toplevel->base);
     if (!toplevel->scene_tree) {
         free(toplevel);
         return;
@@ -125,7 +125,7 @@ void server_new_xdg_popup(struct wl_listener *listener, void *data) {
     wl_signal_add(&xdg_popup->events.destroy, &popup->destroy);
 }
 
-static void xdg_popup_commit(struct wl_listener *listener, void *data) {
+void xdg_popup_commit(struct wl_listener *listener, void *data) {
     (void)data;
     struct compositor_popup *popup = wl_container_of(listener, popup, commit);
 
@@ -134,7 +134,7 @@ static void xdg_popup_commit(struct wl_listener *listener, void *data) {
     }
 }
 
-static void xdg_popup_destroy(struct wl_listener *listener, void *data) {
+void xdg_popup_destroy(struct wl_listener *listener, void *data) {
     (void)data;
     struct compositor_popup *popup = wl_container_of(listener, popup, destroy);
 
@@ -161,6 +161,7 @@ void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
     }
 
     wl_list_remove(&toplevel->link);
+    wl_list_init(&toplevel->link);
 }
 
 void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
@@ -190,6 +191,10 @@ void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
     wl_list_remove(&toplevel->request_resize.link);
     wl_list_remove(&toplevel->request_maximize.link);
     wl_list_remove(&toplevel->request_fullscreen.link);
+
+    if (toplevel->scene_tree) {
+        wlr_scene_node_destroy(&toplevel->scene_tree->node);
+    }
 
     free(toplevel);
 }
