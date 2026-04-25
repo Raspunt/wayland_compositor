@@ -17,7 +17,7 @@ static void process_cursor_move(struct compositor_state *server) {
 	struct compositor_toplevel *toplevel = server->grabbed_toplevel;
 	if (!toplevel) return;
 	
-	wlr_scene_node_set_position(&toplevel->scene_tree->node,
+	wlr_scene_node_set_position(&toplevel->border_tree->node,
 		server->cursor->x - server->grab_x,
 		server->cursor->y - server->grab_y);
 }
@@ -36,22 +36,22 @@ void begin_interactive(struct compositor_toplevel *toplevel,
 	server->resize_edges = edges;
 	
 	if (mode == CURSOR_MOVE) {
-		server->grab_x = server->cursor->x - toplevel->scene_tree->node.x;
-		server->grab_y = server->cursor->y - toplevel->scene_tree->node.y;
+		server->grab_x = server->cursor->x - toplevel->border_tree->node.x;
+		server->grab_y = server->cursor->y - toplevel->border_tree->node.y;
 	} else {
 		struct wlr_box geo_box;
 		wlr_xdg_surface_get_geometry(toplevel->xdg_toplevel->base, &geo_box);
 		
-		double border_x = (toplevel->scene_tree->node.x + geo_box.x) +
+		double border_x = (toplevel->border_tree->node.x + BORDER_WIDTH + geo_box.x) +
 			((edges & WLR_EDGE_RIGHT) ? geo_box.width : 0);
-		double border_y = (toplevel->scene_tree->node.y + geo_box.y) +
+		double border_y = (toplevel->border_tree->node.y + BORDER_WIDTH + geo_box.y) +
 			((edges & WLR_EDGE_BOTTOM) ? geo_box.height : 0);
 			
 		server->grab_x = server->cursor->x - border_x;
 		server->grab_y = server->cursor->y - border_y;
 		server->grab_geobox = geo_box;
-		server->grab_geobox.x += toplevel->scene_tree->node.x;
-		server->grab_geobox.y += toplevel->scene_tree->node.y;
+		server->grab_geobox.x += toplevel->border_tree->node.x + BORDER_WIDTH;
+		server->grab_geobox.y += toplevel->border_tree->node.y + BORDER_WIDTH;
 	}
 }
 
@@ -63,19 +63,19 @@ struct compositor_toplevel *desktop_toplevel_at(struct compositor_state *server,
 	struct wlr_scene_node *node = wlr_scene_node_at(
 		&server->scene->tree.node, lx, ly, sx, sy);
 	
-	if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
+	if (node == NULL) {
 		return NULL;
 	}
 	
-	struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
-	struct wlr_scene_surface *scene_surface = 
-		wlr_scene_surface_try_from_buffer(scene_buffer);
-	
-	if (!scene_surface) {
-		return NULL;
+	if (node->type == WLR_SCENE_NODE_BUFFER) {
+		struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
+		struct wlr_scene_surface *scene_surface = 
+			wlr_scene_surface_try_from_buffer(scene_buffer);
+		
+		if (scene_surface) {
+			*surface = scene_surface->surface;
+		}
 	}
-	
-	*surface = scene_surface->surface;
 	
 	/* Ищем родительский scene_tree, у которого есть data = toplevel */
 	struct wlr_scene_tree *tree = node->parent;

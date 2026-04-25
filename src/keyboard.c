@@ -21,86 +21,64 @@ static bool handle_keybinding(struct compositor_state *server, uint32_t modifier
 		return true;
 	}
 
-	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_Return) {
-		pid_t pid;
-		char *argv[] = {"alacritty", NULL};
-		if (posix_spawnp(&pid, "alacritty", NULL, NULL, argv, environ) != 0) {
-			wlr_log(WLR_ERROR, "Failed to spawn alacritty");
-		}
-		return true;
-	}
-	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_d) {
-		pid_t pid;
-		char *argv[] = {"fuzzel", NULL};
-		if (posix_spawnp(&pid, "fuzzel", NULL, NULL, argv, environ) != 0) {
-			wlr_log(WLR_ERROR, "Failed to spawn fuzzel");
-		}
-		return true;
-	}
-
+	if (!server->cfg) return false;
 	
-	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_Escape) {
-		wl_display_terminate(server->wl_display);
-		return true;
-	}
-
-	/* Переключение workspaces: Alt+1..9, Alt+0 */
-	if ((modifiers & WLR_MODIFIER_ALT) && sym >= XKB_KEY_1 && sym <= XKB_KEY_9) {
-		switch_workspace(server, sym - XKB_KEY_1 + 1);
-		return true;
-	}
-	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_0) {
-		switch_workspace(server, 10);
-		return true;
-	}
-
-	/* Перемещение окна на workspace: Alt+Shift+1..9, Alt+Shift+0 */
-	if ((modifiers & (WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT)) && sym >= XKB_KEY_1 && sym <= XKB_KEY_9) {
-		struct compositor_toplevel *toplevel = get_focused_toplevel(server);
-		if (toplevel) {
-			move_toplevel_to_workspace(toplevel, sym - XKB_KEY_1 + 1);
-		}
-		return true;
-	}
-	if ((modifiers & (WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT)) && sym == XKB_KEY_0) {
-		struct compositor_toplevel *toplevel = get_focused_toplevel(server);
-		if (toplevel) {
-			move_toplevel_to_workspace(toplevel, 10);
-		}
-		return true;
-	}
-
-	/* Навигация по окнам: Alt+H/Left или Alt+L/Right */
-	if ((modifiers & WLR_MODIFIER_ALT) && !(modifiers & WLR_MODIFIER_SHIFT)) {
-		if (sym == XKB_KEY_Left || sym == XKB_KEY_h) {
-			focus_prev(server);
+	for (int i = 0; i < server->cfg->num_bindings; i++) {
+		struct keybinding *kb = &server->cfg->bindings[i];
+		if (kb->keysym == sym && kb->modifiers == modifiers) {
+			switch (kb->action) {
+			case BINDING_EXEC: {
+				if (!kb->arg) break;
+				pid_t pid;
+				char *argv[] = {kb->arg, NULL};
+				posix_spawnp(&pid, kb->arg, NULL, NULL, argv, environ);
+				break;
+			}
+			case BINDING_EXIT:
+				wl_display_terminate(server->wl_display);
+				break;
+			case BINDING_WORKSPACE:
+				switch_workspace(server, kb->arg ? atoi(kb->arg) : 1);
+				break;
+			case BINDING_MOVETOWORKSPACE: {
+				struct compositor_toplevel *t = get_focused_toplevel(server);
+				if (t) move_toplevel_to_workspace(t, kb->arg ? atoi(kb->arg) : 1);
+				break;
+			}
+			case BINDING_FOCUS_PREV:
+				focus_prev(server);
+				break;
+			case BINDING_FOCUS_NEXT:
+				focus_next(server);
+				break;
+			case BINDING_MOVE_PREV:
+				move_toplevel_prev(server);
+				break;
+			case BINDING_MOVE_NEXT:
+				move_toplevel_next(server);
+				break;
+			case BINDING_KILL: {
+				struct compositor_toplevel *t = get_focused_toplevel(server);
+				if (t) wlr_xdg_toplevel_send_close(t->xdg_toplevel);
+				break;
+			}
+			case BINDING_RESIZE_LEFT:
+				resize_toplevel_left(server);
+				break;
+			case BINDING_RESIZE_RIGHT:
+				resize_toplevel_right(server);
+				break;
+			case BINDING_RESIZE_UP:
+				resize_toplevel_up(server);
+				break;
+			case BINDING_RESIZE_DOWN:
+				resize_toplevel_down(server);
+				break;
+			default:
+				break;
+			}
 			return true;
 		}
-		if (sym == XKB_KEY_Right || sym == XKB_KEY_l) {
-			focus_next(server);
-			return true;
-		}
-	}
-
-	/* Перемещение окна в порядке: Alt+Shift+H/Left или Alt+Shift+L/Right */
-	if ((modifiers & (WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT))) {
-		if (sym == XKB_KEY_Left || sym == XKB_KEY_h) {
-			move_toplevel_prev(server);
-			return true;
-		}
-		if (sym == XKB_KEY_Right || sym == XKB_KEY_l) {
-			move_toplevel_next(server);
-			return true;
-		}
-	}
-
-	/* Закрыть окно в фокусе: Ctrl+Q */
-	if ((modifiers & WLR_MODIFIER_CTRL) && sym == XKB_KEY_q) {
-		struct compositor_toplevel *toplevel = get_focused_toplevel(server);
-		if (toplevel) {
-			wlr_xdg_toplevel_send_close(toplevel->xdg_toplevel);
-		}
-		return true;
 	}
 	
 	return false;
@@ -129,11 +107,9 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 
 	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
-		if (modifiers & WLR_MODIFIER_ALT) {
-			for (int i = 0; i < nsyms; i++) {
-				handled = handle_keybinding(server, modifiers, syms[i]);
-				if (handled) break;
-			}
+		for (int i = 0; i < nsyms; i++) {
+			handled = handle_keybinding(server, modifiers, syms[i]);
+			if (handled) break;
 		}
 	}
 

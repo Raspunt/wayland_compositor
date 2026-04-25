@@ -37,7 +37,8 @@ src_files = files(
   'src/keyboard.c',
   'src/input.c',
   'src/renderer.c',
-  'src/layer_shell.c'
+  'src/layer_shell.c',
+  'src/config.c'
 )
 
 executable('myexe',

@@ -40,7 +40,11 @@ int main(void) {
 
     signal(SIGCHLD, SIG_IGN);
 
-    struct compositor_state cs = {0};  
+    struct compositor_state cs = {0};
+    struct compositor_config cfg = {0};
+    config_load(&cfg);
+    cs.cfg = &cfg;
+    
     struct wl_event_source *sigint = NULL;
     struct wl_event_source *sigterm = NULL;
 

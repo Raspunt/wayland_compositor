@@ -4,6 +4,7 @@
 #include "src/output.h"
 #include "src/cursor.h"
 #include "src/renderer.h"
+#include "src/config.h"
 
 struct wlr_layer_shell_v1;
 
@@ -63,6 +64,7 @@ struct compositor_state {
     struct wl_listener new_input;
     
     int active_workspace;
+    struct compositor_config *cfg;
 };
 
 #endif
