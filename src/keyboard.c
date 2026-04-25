@@ -69,6 +69,39 @@ static bool handle_keybinding(struct compositor_state *server, uint32_t modifier
 		}
 		return true;
 	}
+
+	/* Навигация по окнам: Alt+H/Left или Alt+L/Right */
+	if ((modifiers & WLR_MODIFIER_ALT) && !(modifiers & WLR_MODIFIER_SHIFT)) {
+		if (sym == XKB_KEY_Left || sym == XKB_KEY_h) {
+			focus_prev(server);
+			return true;
+		}
+		if (sym == XKB_KEY_Right || sym == XKB_KEY_l) {
+			focus_next(server);
+			return true;
+		}
+	}
+
+	/* Перемещение окна в порядке: Alt+Shift+H/Left или Alt+Shift+L/Right */
+	if ((modifiers & (WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT))) {
+		if (sym == XKB_KEY_Left || sym == XKB_KEY_h) {
+			move_toplevel_prev(server);
+			return true;
+		}
+		if (sym == XKB_KEY_Right || sym == XKB_KEY_l) {
+			move_toplevel_next(server);
+			return true;
+		}
+	}
+
+	/* Закрыть окно в фокусе: Ctrl+Q */
+	if ((modifiers & WLR_MODIFIER_CTRL) && sym == XKB_KEY_q) {
+		struct compositor_toplevel *toplevel = get_focused_toplevel(server);
+		if (toplevel) {
+			wlr_xdg_toplevel_send_close(toplevel->xdg_toplevel);
+		}
+		return true;
+	}
 	
 	return false;
 }

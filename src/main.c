@@ -20,6 +20,7 @@
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
 
 #include "src/output.h"
 #include "src/input.h"   
@@ -193,6 +194,14 @@ int main(void) {
     }
     cs.new_layer_surface.notify = server_new_layer_surface;
     wl_signal_add(&cs.layer_shell->events.new_surface, &cs.new_layer_surface);
+    
+    cs.xdg_decoration_manager = wlr_xdg_decoration_manager_v1_create(cs.wl_display);
+    if (!cs.xdg_decoration_manager) {
+        fprintf(stderr, "Failed to create xdg decoration manager\n");
+        goto cleanup;
+    }
+    cs.new_xdg_toplevel_decoration.notify = server_new_xdg_toplevel_decoration;
+    wl_signal_add(&cs.xdg_decoration_manager->events.new_toplevel_decoration, &cs.new_xdg_toplevel_decoration);
 
     sigint = wl_event_loop_add_signal(cs.wl_event_loop, SIGINT, handle_signal, cs.wl_display);
     sigterm = wl_event_loop_add_signal(cs.wl_event_loop, SIGTERM, handle_signal, cs.wl_display);

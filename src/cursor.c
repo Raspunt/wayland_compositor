@@ -2,8 +2,10 @@
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_scene.h> 
 #include <wlr/types/wlr_xdg_shell.h> 
+#include <wlr/types/wlr_keyboard.h>
 #include <wlr/util/log.h>
 #include <wlr/util/edges.h>
+#include <linux/input-event-codes.h>
 
 #include "src/output.h"
 #include "src/compositor.h"
@@ -18,42 +20,6 @@ static void process_cursor_move(struct compositor_state *server) {
 	wlr_scene_node_set_position(&toplevel->scene_tree->node,
 		server->cursor->x - server->grab_x,
 		server->cursor->y - server->grab_y);
-}
-
-static void process_cursor_resize(struct compositor_state *server) {
-	struct compositor_toplevel *toplevel = server->grabbed_toplevel;
-	if (!toplevel) return;
-	
-	double border_x = server->cursor->x - server->grab_x;
-	double border_y = server->cursor->y - server->grab_y;
-	int new_left = server->grab_geobox.x;
-	int new_right = server->grab_geobox.x + server->grab_geobox.width;
-	int new_top = server->grab_geobox.y;
-	int new_bottom = server->grab_geobox.y + server->grab_geobox.height;
-
-	if (server->resize_edges & WLR_EDGE_TOP) {
-		new_top = border_y;
-		if (new_top >= new_bottom) new_top = new_bottom - 1;
-	} else if (server->resize_edges & WLR_EDGE_BOTTOM) {
-		new_bottom = border_y;
-		if (new_bottom <= new_top) new_bottom = new_top + 1;
-	}
-	if (server->resize_edges & WLR_EDGE_LEFT) {
-		new_left = border_x;
-		if (new_left >= new_right) new_left = new_right - 1;
-	} else if (server->resize_edges & WLR_EDGE_RIGHT) {
-		new_right = border_x;
-		if (new_right <= new_left) new_right = new_left + 1;
-	}
-
-	struct wlr_box geo_box;
-	wlr_xdg_surface_get_geometry(toplevel->xdg_toplevel->base, &geo_box);
-	wlr_scene_node_set_position(&toplevel->scene_tree->node,
-		new_left - geo_box.x, new_top - geo_box.y);
-
-	int new_width = new_right - new_left;
-	int new_height = new_bottom - new_top;
-	wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, new_width, new_height);
 }
 
 void reset_cursor_mode(struct compositor_state *server) {
@@ -121,12 +87,9 @@ struct compositor_toplevel *desktop_toplevel_at(struct compositor_state *server,
 }
 
 static void process_cursor_motion(struct compositor_state *server, uint32_t time) {
-	/* Обработка drag/resize */
+	/* Обработка drag */
 	if (server->cursor_mode == CURSOR_MOVE && server->grabbed_toplevel) {
 		process_cursor_move(server);
-		return;
-	} else if (server->cursor_mode == CURSOR_RESIZE && server->grabbed_toplevel) {
-		process_cursor_resize(server);
 		return;
 	}
 	
@@ -162,6 +125,24 @@ void server_cursor_axis(struct wl_listener *listener, void *data) {
 void server_cursor_button(struct wl_listener *listener, void *data) {
 	struct compositor_state *server = wl_container_of(listener, server, cursor_button);
 	struct wlr_pointer_button_event *event = data;
+	
+	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(server->seat);
+	uint32_t modifiers = keyboard ? wlr_keyboard_get_modifiers(keyboard) : 0;
+	
+	/* Win + Правая кнопка = move окна */
+	if (event->state == WL_POINTER_BUTTON_STATE_PRESSED &&
+	    event->button == BTN_RIGHT &&
+	    (modifiers & WLR_MODIFIER_LOGO)) {
+		double sx, sy;
+		struct wlr_surface *surface = NULL;
+		struct compositor_toplevel *toplevel = desktop_toplevel_at(server,
+			server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+		if (toplevel) {
+			focus_toplevel(toplevel);
+			begin_interactive(toplevel, CURSOR_MOVE, 0);
+		}
+		return;
+	}
 	
 	wlr_seat_pointer_notify_button(server->seat,
 		event->time_msec, event->button, event->state);

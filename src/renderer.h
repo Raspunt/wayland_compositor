@@ -15,6 +15,7 @@ struct compositor_toplevel {
     struct wlr_xdg_toplevel *xdg_toplevel;
     struct wlr_scene_tree *scene_tree;
     int workspace;
+    bool floating;
     
     struct wl_listener map;
     struct wl_listener unmap;
@@ -37,6 +38,11 @@ void focus_toplevel(struct compositor_toplevel *toplevel);
 struct compositor_toplevel *get_focused_toplevel(struct compositor_state *server);
 void switch_workspace(struct compositor_state *server, int workspace);
 void move_toplevel_to_workspace(struct compositor_toplevel *toplevel, int workspace);
+void arrange_workspace(struct compositor_state *server, int workspace);
+void focus_next(struct compositor_state *server);
+void focus_prev(struct compositor_state *server);
+void move_toplevel_next(struct compositor_state *server);
+void move_toplevel_prev(struct compositor_state *server);
 struct compositor_toplevel *desktop_toplevel_at(struct compositor_state *server, 
         double lx, double ly, struct wlr_surface **surface, double *sx, double *sy);
 
@@ -54,5 +60,7 @@ void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *data);
 
 void xdg_popup_commit(struct wl_listener *listener, void *data);
 void xdg_popup_destroy(struct wl_listener *listener, void *data);
+
+void server_new_xdg_toplevel_decoration(struct wl_listener *listener, void *data);
 
 #endif

@@ -40,6 +40,9 @@ struct compositor_state {
 
     struct wlr_layer_shell_v1 *layer_shell;
     struct wl_listener new_layer_surface;
+    
+    struct wlr_xdg_decoration_manager_v1 *xdg_decoration_manager;
+    struct wl_listener new_xdg_toplevel_decoration;
 
     struct wlr_cursor *cursor;
     struct wlr_xcursor_manager *cursor_mgr;

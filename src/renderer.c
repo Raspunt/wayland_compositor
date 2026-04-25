@@ -7,6 +7,8 @@
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/util/log.h>
 
 // Forward declarations
@@ -53,6 +55,7 @@ void switch_workspace(struct compositor_state *server, int workspace) {
     }
     
     server->active_workspace = workspace;
+    arrange_workspace(server, workspace);
     
     wl_list_for_each(toplevel, &server->toplevels, link) {
         if (toplevel->workspace == workspace) {
@@ -65,13 +68,193 @@ void switch_workspace(struct compositor_state *server, int workspace) {
 void move_toplevel_to_workspace(struct compositor_toplevel *toplevel, int workspace) {
     if (!toplevel || workspace < 1 || workspace > NUM_WORKSPACES) return;
     
+    int old_workspace = toplevel->workspace;
     toplevel->workspace = workspace;
     if (workspace == toplevel->server->active_workspace) {
         wlr_scene_node_set_enabled(&toplevel->scene_tree->node, true);
+        wl_list_remove(&toplevel->link);
+        wl_list_insert(&toplevel->server->toplevels, &toplevel->link);
         focus_toplevel(toplevel);
+        arrange_workspace(toplevel->server, workspace);
     } else {
         wlr_scene_node_set_enabled(&toplevel->scene_tree->node, false);
         wlr_xdg_toplevel_set_activated(toplevel->xdg_toplevel, false);
+        arrange_workspace(toplevel->server, old_workspace);
+    }
+}
+
+void arrange_workspace(struct compositor_state *server, int workspace) {
+    const int gaps = 8;
+    const int outer_gaps = 8;
+    const double mfact = 0.55;
+    
+    struct wlr_box layout_box;
+    wlr_output_layout_get_box(server->output_layout, NULL, &layout_box);
+    
+    int area_x = layout_box.x + outer_gaps;
+    int area_y = layout_box.y + outer_gaps;
+    int area_w = layout_box.width - 2 * outer_gaps;
+    int area_h = layout_box.height - 2 * outer_gaps;
+    
+    int count = 0;
+    struct compositor_toplevel *t;
+    wl_list_for_each(t, &server->toplevels, link) {
+        if (t->workspace == workspace && !t->floating) {
+            count++;
+        }
+    }
+    
+    if (count == 0) return;
+    
+    if (count == 1) {
+        wl_list_for_each(t, &server->toplevels, link) {
+            if (t->workspace == workspace && !t->floating) {
+                wlr_scene_node_set_position(&t->scene_tree->node, area_x, area_y);
+                wlr_xdg_toplevel_set_size(t->xdg_toplevel, area_w, area_h);
+                break;
+            }
+        }
+        return;
+    }
+    
+    int master_w = (int)((area_w - gaps) * mfact);
+    int stack_w = area_w - master_w - gaps;
+    
+    /* Master — самое новое окно (head списка) */
+    struct compositor_toplevel *master = NULL;
+    wl_list_for_each(t, &server->toplevels, link) {
+        if (t->workspace == workspace && !t->floating) {
+            master = t;
+            break;
+        }
+    }
+    
+    if (master) {
+        wlr_scene_node_set_position(&master->scene_tree->node, area_x, area_y);
+        wlr_xdg_toplevel_set_size(master->xdg_toplevel, master_w, area_h);
+    }
+    
+    int stack_count = count - 1;
+    if (stack_count > 0) {
+        int stack_h = (area_h - (stack_count - 1) * gaps) / stack_count;
+        int stack_x = area_x + master_w + gaps;
+        int stack_y = area_y;
+        int i = 0;
+        
+        wl_list_for_each(t, &server->toplevels, link) {
+            if (t->workspace == workspace && !t->floating && t != master) {
+                int h = stack_h;
+                if (i == stack_count - 1) {
+                    h = (area_y + area_h) - stack_y;
+                }
+                wlr_scene_node_set_position(&t->scene_tree->node, stack_x, stack_y);
+                wlr_xdg_toplevel_set_size(t->xdg_toplevel, stack_w, h);
+                stack_y += h + gaps;
+                i++;
+            }
+        }
+    }
+}
+
+void focus_next(struct compositor_state *server) {
+    struct compositor_toplevel *current = get_focused_toplevel(server);
+    struct compositor_toplevel *t;
+    
+    if (!current) {
+        wl_list_for_each(t, &server->toplevels, link) {
+            if (t->workspace == server->active_workspace) {
+                focus_toplevel(t);
+                return;
+            }
+        }
+        return;
+    }
+    
+    struct wl_list *pos = current->link.next;
+    while (pos != &current->link) {
+        if (pos == &server->toplevels) {
+            pos = server->toplevels.next;
+            continue;
+        }
+        t = wl_container_of(pos, t, link);
+        if (t->workspace == server->active_workspace) {
+            focus_toplevel(t);
+            return;
+        }
+        pos = pos->next;
+    }
+}
+
+void focus_prev(struct compositor_state *server) {
+    struct compositor_toplevel *current = get_focused_toplevel(server);
+    struct compositor_toplevel *t;
+    
+    if (!current) {
+        wl_list_for_each_reverse(t, &server->toplevels, link) {
+            if (t->workspace == server->active_workspace) {
+                focus_toplevel(t);
+                return;
+            }
+        }
+        return;
+    }
+    
+    struct wl_list *pos = current->link.prev;
+    while (pos != &current->link) {
+        if (pos == &server->toplevels) {
+            pos = server->toplevels.prev;
+            continue;
+        }
+        t = wl_container_of(pos, t, link);
+        if (t->workspace == server->active_workspace) {
+            focus_toplevel(t);
+            return;
+        }
+        pos = pos->prev;
+    }
+}
+
+void move_toplevel_next(struct compositor_state *server) {
+    struct compositor_toplevel *current = get_focused_toplevel(server);
+    if (!current || current->workspace != server->active_workspace) return;
+    
+    struct compositor_toplevel *t;
+    struct wl_list *pos = current->link.next;
+    while (pos != &current->link) {
+        if (pos == &server->toplevels) {
+            pos = server->toplevels.next;
+            continue;
+        }
+        t = wl_container_of(pos, t, link);
+        if (t->workspace == server->active_workspace) {
+            wl_list_remove(&current->link);
+            wl_list_insert(&t->link, &current->link);
+            arrange_workspace(server, server->active_workspace);
+            return;
+        }
+        pos = pos->next;
+    }
+}
+
+void move_toplevel_prev(struct compositor_state *server) {
+    struct compositor_toplevel *current = get_focused_toplevel(server);
+    if (!current || current->workspace != server->active_workspace) return;
+    
+    struct compositor_toplevel *t;
+    struct wl_list *pos = current->link.prev;
+    while (pos != &current->link) {
+        if (pos == &server->toplevels) {
+            pos = server->toplevels.prev;
+            continue;
+        }
+        t = wl_container_of(pos, t, link);
+        if (t->workspace == server->active_workspace) {
+            wl_list_remove(&current->link);
+            wl_list_insert(pos->prev, &current->link);
+            arrange_workspace(server, server->active_workspace);
+            return;
+        }
+        pos = pos->prev;
     }
 }
 
@@ -125,6 +308,7 @@ void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
     toplevel->server = server;
     toplevel->xdg_toplevel = xdg_toplevel;
     toplevel->workspace = server->active_workspace;
+    toplevel->floating = false;
     toplevel->scene_tree =
         wlr_scene_xdg_surface_create(server->xdg_tree, xdg_toplevel->base);
     if (!toplevel->scene_tree) {
@@ -200,6 +384,7 @@ void xdg_toplevel_map(struct wl_listener *listener, void *data) {
     struct compositor_toplevel *toplevel = wl_container_of(listener, toplevel, map);
 
     wl_list_insert(&toplevel->server->toplevels, &toplevel->link);
+    arrange_workspace(toplevel->server, toplevel->workspace);
     if (toplevel->workspace != toplevel->server->active_workspace) {
         wlr_scene_node_set_enabled(&toplevel->scene_tree->node, false);
     } else {
@@ -217,6 +402,7 @@ void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
 
     wl_list_remove(&toplevel->link);
     wl_list_init(&toplevel->link);
+    arrange_workspace(toplevel->server, toplevel->workspace);
 }
 
 void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
@@ -261,9 +447,9 @@ void xdg_toplevel_request_move(struct wl_listener *listener, void *data) {
 }
 
 void xdg_toplevel_request_resize(struct wl_listener *listener, void *data) {
-    struct wlr_xdg_toplevel_resize_event *event = data;
-    struct compositor_toplevel *toplevel = wl_container_of(listener, toplevel, request_resize);
-    begin_interactive(toplevel, CURSOR_RESIZE, event->edges);
+    (void)listener;
+    (void)data;
+    // Resize мышкой отключён — тайлинговый compositor управляет размерами
 }
 
 void xdg_toplevel_request_maximize(struct wl_listener *listener, void *data) {
@@ -280,4 +466,11 @@ void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *data) {
     if (toplevel->xdg_toplevel->base->initialized) {
         wlr_xdg_surface_schedule_configure(toplevel->xdg_toplevel->base);
     }
+}
+
+void server_new_xdg_toplevel_decoration(struct wl_listener *listener, void *data) {
+    (void)listener;
+    struct wlr_xdg_toplevel_decoration_v1 *decoration = data;
+    wlr_xdg_toplevel_decoration_v1_set_mode(decoration,
+        WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
 }
