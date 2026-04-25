@@ -27,7 +27,7 @@ sudo apt install -y \
 
 ```bash
 # Клонирование
-git clone <url> flottywm
+git clone https://github.com/Raspunt/wayland_compositor.git flottywm
 cd flottywm
 
 # Сборка через make (обёртка над meson + ninja)
