@@ -7,6 +7,8 @@
 
 struct wlr_layer_shell_v1;
 
+#define NUM_WORKSPACES 10
+
 struct compositor_state {
     struct wl_display *wl_display;
     struct wl_event_loop *wl_event_loop;
@@ -56,6 +58,8 @@ struct compositor_state {
 
     struct wl_list keyboards;
     struct wl_listener new_input;
+    
+    int active_workspace;
 };
 
 #endif

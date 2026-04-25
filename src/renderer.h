@@ -14,6 +14,7 @@ struct compositor_toplevel {
     struct compositor_state *server;  // указатель на неполный тип - ок
     struct wlr_xdg_toplevel *xdg_toplevel;
     struct wlr_scene_tree *scene_tree;
+    int workspace;
     
     struct wl_listener map;
     struct wl_listener unmap;
@@ -33,6 +34,9 @@ struct compositor_popup {
 
 
 void focus_toplevel(struct compositor_toplevel *toplevel);
+struct compositor_toplevel *get_focused_toplevel(struct compositor_state *server);
+void switch_workspace(struct compositor_state *server, int workspace);
+void move_toplevel_to_workspace(struct compositor_toplevel *toplevel, int workspace);
 struct compositor_toplevel *desktop_toplevel_at(struct compositor_state *server, 
         double lx, double ly, struct wlr_surface **surface, double *sx, double *sy);
 

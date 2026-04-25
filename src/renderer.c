@@ -25,6 +25,56 @@ void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *data);
 void xdg_popup_commit(struct wl_listener *listener, void *data);
 void xdg_popup_destroy(struct wl_listener *listener, void *data);
 
+struct compositor_toplevel *get_focused_toplevel(struct compositor_state *server) {
+    struct wlr_surface *focused = server->seat->keyboard_state.focused_surface;
+    if (!focused) return NULL;
+    
+    struct compositor_toplevel *toplevel;
+    wl_list_for_each(toplevel, &server->toplevels, link) {
+        if (toplevel->xdg_toplevel->base->surface == focused) {
+            return toplevel;
+        }
+    }
+    return NULL;
+}
+
+void switch_workspace(struct compositor_state *server, int workspace) {
+    if (workspace < 1 || workspace > NUM_WORKSPACES) return;
+    if (workspace == server->active_workspace) return;
+    
+    struct compositor_toplevel *toplevel;
+    wl_list_for_each(toplevel, &server->toplevels, link) {
+        if (toplevel->workspace == workspace) {
+            wlr_scene_node_set_enabled(&toplevel->scene_tree->node, true);
+        } else {
+            wlr_scene_node_set_enabled(&toplevel->scene_tree->node, false);
+            wlr_xdg_toplevel_set_activated(toplevel->xdg_toplevel, false);
+        }
+    }
+    
+    server->active_workspace = workspace;
+    
+    wl_list_for_each(toplevel, &server->toplevels, link) {
+        if (toplevel->workspace == workspace) {
+            focus_toplevel(toplevel);
+            break;
+        }
+    }
+}
+
+void move_toplevel_to_workspace(struct compositor_toplevel *toplevel, int workspace) {
+    if (!toplevel || workspace < 1 || workspace > NUM_WORKSPACES) return;
+    
+    toplevel->workspace = workspace;
+    if (workspace == toplevel->server->active_workspace) {
+        wlr_scene_node_set_enabled(&toplevel->scene_tree->node, true);
+        focus_toplevel(toplevel);
+    } else {
+        wlr_scene_node_set_enabled(&toplevel->scene_tree->node, false);
+        wlr_xdg_toplevel_set_activated(toplevel->xdg_toplevel, false);
+    }
+}
+
 void focus_toplevel(struct compositor_toplevel *toplevel) {
     if (toplevel == NULL) {
         return;
@@ -74,6 +124,7 @@ void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 
     toplevel->server = server;
     toplevel->xdg_toplevel = xdg_toplevel;
+    toplevel->workspace = server->active_workspace;
     toplevel->scene_tree =
         wlr_scene_xdg_surface_create(server->xdg_tree, xdg_toplevel->base);
     if (!toplevel->scene_tree) {
@@ -149,7 +200,11 @@ void xdg_toplevel_map(struct wl_listener *listener, void *data) {
     struct compositor_toplevel *toplevel = wl_container_of(listener, toplevel, map);
 
     wl_list_insert(&toplevel->server->toplevels, &toplevel->link);
-    focus_toplevel(toplevel);
+    if (toplevel->workspace != toplevel->server->active_workspace) {
+        wlr_scene_node_set_enabled(&toplevel->scene_tree->node, false);
+    } else {
+        focus_toplevel(toplevel);
+    }
 }
 
 void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {

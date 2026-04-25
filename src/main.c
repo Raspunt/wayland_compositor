@@ -19,6 +19,7 @@
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
+#include <wlr/types/wlr_xdg_output_v1.h>
 
 #include "src/output.h"
 #include "src/input.h"   
@@ -55,6 +56,8 @@ int main(void) {
     wl_list_init(&cs.new_output.link);
     wl_list_init(&cs.new_layer_surface.link);
 
+    cs.active_workspace = 1;
+    
     cs.wl_display = wl_display_create();
     if (!cs.wl_display) {
         fprintf(stderr, "Failed to create Wayland display\n");
@@ -128,6 +131,7 @@ int main(void) {
     wlr_compositor_create(cs.wl_display, 6, cs.renderer);
     wlr_subcompositor_create(cs.wl_display);
     wlr_data_device_manager_create(cs.wl_display);
+    wlr_xdg_output_manager_v1_create(cs.wl_display, cs.output_layout);
 
     cs.new_output.notify = new_output_notify;
     wl_signal_add(&cs.backend->events.new_output, &cs.new_output);
@@ -193,11 +197,6 @@ int main(void) {
     sigint = wl_event_loop_add_signal(cs.wl_event_loop, SIGINT, handle_signal, cs.wl_display);
     sigterm = wl_event_loop_add_signal(cs.wl_event_loop, SIGTERM, handle_signal, cs.wl_display);
 
-    if (!wlr_backend_start(cs.backend)) {
-        fprintf(stderr, "Failed to start backend\n");
-        goto cleanup;
-    }
-
     const char *socket = wl_display_add_socket_auto(cs.wl_display);
     if (!socket) {
         fprintf(stderr, "Failed to add socket\n");
@@ -205,18 +204,11 @@ int main(void) {
     }
 
     setenv("WAYLAND_DISPLAY", socket, true);
-    
-    // Экспортируем WAYLAND_DISPLAY в systemd и dbus сессии
-    // чтобы программы, запущенные вне compositor'а, знали куда подключаться
-    pid_t pid = fork();
-    if (pid == 0) {
-        execlp("systemctl", "systemctl", "--user", "import-environment", "WAYLAND_DISPLAY", NULL);
-        _exit(0);
-    }
-    pid = fork();
-    if (pid == 0) {
-        execlp("dbus-update-activation-environment", "dbus-update-activation-environment", "--systemd", "WAYLAND_DISPLAY", NULL);
-        _exit(0);
+    unsetenv("DISPLAY");
+
+    if (!wlr_backend_start(cs.backend)) {
+        fprintf(stderr, "Failed to start backend\n");
+        goto cleanup;
     }
     
     printf("Compositor running on WAYLAND_DISPLAY=%s\n", socket);

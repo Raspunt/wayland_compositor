@@ -29,7 +29,7 @@ static bool handle_keybinding(struct compositor_state *server, uint32_t modifier
 		}
 		return true;
 	}
-	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_D) {
+	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_d) {
 		pid_t pid;
 		char *argv[] = {"fuzzel", NULL};
 		if (posix_spawnp(&pid, "fuzzel", NULL, NULL, argv, environ) != 0) {
@@ -41,6 +41,32 @@ static bool handle_keybinding(struct compositor_state *server, uint32_t modifier
 	
 	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_Escape) {
 		wl_display_terminate(server->wl_display);
+		return true;
+	}
+
+	/* Переключение workspaces: Alt+1..9, Alt+0 */
+	if ((modifiers & WLR_MODIFIER_ALT) && sym >= XKB_KEY_1 && sym <= XKB_KEY_9) {
+		switch_workspace(server, sym - XKB_KEY_1 + 1);
+		return true;
+	}
+	if ((modifiers & WLR_MODIFIER_ALT) && sym == XKB_KEY_0) {
+		switch_workspace(server, 10);
+		return true;
+	}
+
+	/* Перемещение окна на workspace: Alt+Shift+1..9, Alt+Shift+0 */
+	if ((modifiers & (WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT)) && sym >= XKB_KEY_1 && sym <= XKB_KEY_9) {
+		struct compositor_toplevel *toplevel = get_focused_toplevel(server);
+		if (toplevel) {
+			move_toplevel_to_workspace(toplevel, sym - XKB_KEY_1 + 1);
+		}
+		return true;
+	}
+	if ((modifiers & (WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT)) && sym == XKB_KEY_0) {
+		struct compositor_toplevel *toplevel = get_focused_toplevel(server);
+		if (toplevel) {
+			move_toplevel_to_workspace(toplevel, 10);
+		}
 		return true;
 	}
 	

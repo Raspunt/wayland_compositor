@@ -40,13 +40,64 @@ static void layer_surface_commit(struct wl_listener *listener, void *data) {
     struct compositor_layer_surface *layer = wl_container_of(listener, layer, commit);
     struct wlr_layer_surface_v1 *layer_surface = layer->layer_surface;
     
-    printf("LAYER: commit, initial=%d\n", layer_surface->initial_commit);
-    
-    if (layer_surface->initial_commit) {
-        struct wlr_box output_box;
-        wlr_output_layout_get_box(layer->server->output_layout, layer_surface->output, &output_box);
-        wlr_layer_surface_v1_configure(layer_surface, output_box.width, output_box.height);
+    if (!layer_surface->output) {
+        return;
     }
+    
+    struct wlr_box output_box;
+    wlr_output_layout_get_box(layer->server->output_layout, layer_surface->output, &output_box);
+    
+    uint32_t anchor = layer_surface->current.anchor;
+    int32_t margin_top = layer_surface->current.margin.top;
+    int32_t margin_right = layer_surface->current.margin.right;
+    int32_t margin_bottom = layer_surface->current.margin.bottom;
+    int32_t margin_left = layer_surface->current.margin.left;
+    
+    int32_t width = layer_surface->current.desired_width;
+    int32_t height = layer_surface->current.desired_height;
+    
+    bool anchor_left = anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT;
+    bool anchor_right = anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
+    bool anchor_top = anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+    bool anchor_bottom = anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM;
+    
+    if (anchor_left && anchor_right) {
+        width = output_box.width - margin_left - margin_right;
+    }
+    if (anchor_top && anchor_bottom) {
+        height = output_box.height - margin_top - margin_bottom;
+    }
+    
+    if (width <= 0) width = 1;
+    if (height <= 0) height = 1;
+    
+    if (layer_surface->current.actual_width != (uint32_t)width ||
+        layer_surface->current.actual_height != (uint32_t)height) {
+        wlr_layer_surface_v1_configure(layer_surface, width, height);
+    }
+    
+    int32_t x = 0, y = 0;
+    if (anchor_left) {
+        x = output_box.x + margin_left;
+    } else if (anchor_right) {
+        x = output_box.x + output_box.width - width - margin_right;
+    } else {
+        x = output_box.x + (output_box.width - width) / 2;
+    }
+    
+    if (anchor_top) {
+        y = output_box.y + margin_top;
+    } else if (anchor_bottom) {
+        y = output_box.y + output_box.height - height - margin_bottom;
+    } else {
+        y = output_box.y + (output_box.height - height) / 2;
+    }
+    
+    wlr_scene_node_set_position(&layer->scene_tree->node, x, y);
+    
+    printf("LAYER: commit, anchor=%d, desired=%dx%d, configured=%dx%d, pos=%d,%d\n",
+        anchor, layer_surface->current.desired_width, layer_surface->current.desired_height,
+        width, height, x, y);
 }
 
 static void layer_surface_destroy(struct wl_listener *listener, void *data) {
@@ -151,8 +202,4 @@ void server_new_layer_surface(struct wl_listener *listener, void *data) {
     wl_signal_add(&layer_surface->events.destroy, &layer->destroy);
     layer->new_popup.notify = layer_surface_new_popup;
     wl_signal_add(&layer_surface->events.new_popup, &layer->new_popup);
-    
-    struct wlr_box output_box;
-    wlr_output_layout_get_box(server->output_layout, layer_surface->output, &output_box);
-    wlr_layer_surface_v1_configure(layer_surface, output_box.width, output_box.height);
 }
