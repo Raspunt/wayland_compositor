@@ -54,10 +54,7 @@ struct compositor_state {
     struct wl_listener cursor_frame;
 
     enum cursor_mode cursor_mode;
-    struct compositor_toplevel *grabbed_toplevel;  
-    struct wlr_box grab_geobox;
-    uint32_t resize_edges;
-    uint32_t grab_button;
+    struct compositor_toplevel *grabbed_toplevel;
     double grab_x, grab_y;
 
     struct wl_list keyboards;

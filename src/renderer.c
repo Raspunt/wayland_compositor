@@ -127,9 +127,11 @@ void arrange_workspace(struct compositor_state *server, int workspace) {
     int area_h = layout_box.height - 2 * outer_gaps;
     
     int count = 0;
+    struct compositor_toplevel *master = NULL;
     struct compositor_toplevel *t;
     wl_list_for_each(t, &server->toplevels, link) {
         if (t->workspace == workspace && !t->floating) {
+            if (!master) master = t;
             count++;
         }
     }
@@ -141,13 +143,8 @@ void arrange_workspace(struct compositor_state *server, int workspace) {
     int content_h = area_h - bw2;
 
     if (count == 1) {
-        wl_list_for_each(t, &server->toplevels, link) {
-            if (t->workspace == workspace && !t->floating) {
-                wlr_scene_node_set_position(&t->border_tree->node, area_x, area_y);
-                wlr_xdg_toplevel_set_size(t->xdg_toplevel, content_w, content_h);
-                break;
-            }
-        }
+        wlr_scene_node_set_position(&master->border_tree->node, area_x, area_y);
+        wlr_xdg_toplevel_set_size(master->xdg_toplevel, content_w, content_h);
         return;
     }
     
@@ -155,15 +152,6 @@ void arrange_workspace(struct compositor_state *server, int workspace) {
     int stack_w = area_w - master_w - gaps - bw2;
     if (master_w < 50) master_w = 50;
     if (stack_w < 50) stack_w = 50;
-    
-    /* Master — самое новое окно (head списка) */
-    struct compositor_toplevel *master = NULL;
-    wl_list_for_each(t, &server->toplevels, link) {
-        if (t->workspace == workspace && !t->floating) {
-            master = t;
-            break;
-        }
-    }
     
     if (master) {
         wlr_scene_node_set_position(&master->border_tree->node, area_x, area_y);

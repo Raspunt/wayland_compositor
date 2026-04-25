@@ -9,9 +9,7 @@ extern char **environ;
 #include <xkbcommon/xkbcommon.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/wait.h>
 #include <spawn.h>
-#include <wlr/util/log.h>
 #include <stdio.h>  
 
 static bool handle_keybinding(struct compositor_state *server, uint32_t modifiers, xkb_keysym_t sym) {

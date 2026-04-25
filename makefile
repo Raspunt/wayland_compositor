@@ -9,7 +9,7 @@ build:
 	ninja -C build
 
 run:
-	WLR_LOG=debug ./build/myexe
+	WLR_LOG=debug ./build/flottywm
 
 rebuild:
 	rm -rf build
@@ -25,4 +25,4 @@ rebuild_and_run:
 	meson build
 	ninja -C build
 
-	WLR_LOG=debug ./build/myexe
+	WLR_LOG=debug ./build/flottywm

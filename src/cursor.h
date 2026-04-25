@@ -4,7 +4,6 @@
 enum cursor_mode {
 	CURSOR_PASSTHROUGH,
 	CURSOR_MOVE,
-	CURSOR_RESIZE,
 };
 
 

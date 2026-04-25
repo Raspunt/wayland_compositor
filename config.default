@@ -1,0 +1,45 @@
+gaps 8
+outer_gaps 8
+mfact 0.55
+$term alacritty
+$launcher fuzzel
+
+$mod Alt
+
+bind $mod+Return exec $term
+bind $mod+d exec $launcher
+bind $mod+Escape exit
+
+bind $mod+1 workspace 1
+bind $mod+2 workspace 2
+bind $mod+3 workspace 3
+bind $mod+4 workspace 4
+bind $mod+5 workspace 5
+bind $mod+6 workspace 6
+bind $mod+7 workspace 7
+bind $mod+8 workspace 8
+bind $mod+9 workspace 9
+bind $mod+0 workspace 10
+
+bind $mod+Shift+1 movetoworkspace 1
+bind $mod+Shift+2 movetoworkspace 2
+bind $mod+Shift+3 movetoworkspace 3
+bind $mod+Shift+4 movetoworkspace 4
+bind $mod+Shift+5 movetoworkspace 5
+bind $mod+Shift+6 movetoworkspace 6
+bind $mod+Shift+7 movetoworkspace 7
+bind $mod+Shift+8 movetoworkspace 8
+bind $mod+Shift+9 movetoworkspace 9
+bind $mod+Shift+0 movetoworkspace 10
+
+bind $mod+h focusprev
+bind $mod+l focusnext
+bind $mod+Shift+h moveprev
+bind $mod+Shift+l movenext
+
+bind $mod+Shift+Left resizeleft
+bind $mod+Shift+Right resizeright
+bind $mod+Shift+Up resizeup
+bind $mod+Shift+Down resizedown
+
+bind $mod+q kill

@@ -34,8 +34,6 @@ struct compositor_popup {
 	struct wl_listener destroy;
 };
 
-
-
 void focus_toplevel(struct compositor_toplevel *toplevel);
 struct compositor_toplevel *get_focused_toplevel(struct compositor_state *server);
 void switch_workspace(struct compositor_state *server, int workspace);

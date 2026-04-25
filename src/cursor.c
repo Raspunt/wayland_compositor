@@ -4,7 +4,6 @@
 #include <wlr/types/wlr_xdg_shell.h> 
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/util/log.h>
-#include <wlr/util/edges.h>
 #include <linux/input-event-codes.h>
 
 #include "src/output.h"
@@ -25,34 +24,17 @@ static void process_cursor_move(struct compositor_state *server) {
 void reset_cursor_mode(struct compositor_state *server) {
 	server->cursor_mode = CURSOR_PASSTHROUGH;
 	server->grabbed_toplevel = NULL;
-	server->grab_button = 0;
 }
 
-void begin_interactive(struct compositor_toplevel *toplevel, 
+void begin_interactive(struct compositor_toplevel *toplevel,
                        enum cursor_mode mode, uint32_t edges) {
 	struct compositor_state *server = toplevel->server;
 	server->grabbed_toplevel = toplevel;
 	server->cursor_mode = mode;
-	server->resize_edges = edges;
-	
-	if (mode == CURSOR_MOVE) {
-		server->grab_x = server->cursor->x - toplevel->border_tree->node.x;
-		server->grab_y = server->cursor->y - toplevel->border_tree->node.y;
-	} else {
-		struct wlr_box geo_box;
-		wlr_xdg_surface_get_geometry(toplevel->xdg_toplevel->base, &geo_box);
-		
-		double border_x = (toplevel->border_tree->node.x + BORDER_WIDTH + geo_box.x) +
-			((edges & WLR_EDGE_RIGHT) ? geo_box.width : 0);
-		double border_y = (toplevel->border_tree->node.y + BORDER_WIDTH + geo_box.y) +
-			((edges & WLR_EDGE_BOTTOM) ? geo_box.height : 0);
-			
-		server->grab_x = server->cursor->x - border_x;
-		server->grab_y = server->cursor->y - border_y;
-		server->grab_geobox = geo_box;
-		server->grab_geobox.x += toplevel->border_tree->node.x + BORDER_WIDTH;
-		server->grab_geobox.y += toplevel->border_tree->node.y + BORDER_WIDTH;
-	}
+	(void)edges;
+
+	server->grab_x = server->cursor->x - toplevel->border_tree->node.x;
+	server->grab_y = server->cursor->y - toplevel->border_tree->node.y;
 }
 
 /* ИСПРАВЛЕНО: Теперь реально ищет окно под курсором */
@@ -152,9 +134,6 @@ void server_cursor_button(struct wl_listener *listener, void *data) {
 			reset_cursor_mode(server);
 		}
 	} else {
-		if (server->cursor_mode == CURSOR_PASSTHROUGH) {
-			server->grab_button = event->button;
-		}
 		double sx, sy;
 		struct wlr_surface *surface = NULL;
 		struct compositor_toplevel *toplevel = desktop_toplevel_at(server,

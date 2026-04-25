@@ -15,14 +15,14 @@ static char *get_config_path(void) {
     if (xdg) {
         size_t len = strlen(xdg) + 32;
         char *path = malloc(len);
-        snprintf(path, len, "%s/flotty/config", xdg);
+        snprintf(path, len, "%s/flottywm/config", xdg);
         return path;
     }
     const char *home = getenv("HOME");
     if (home) {
         size_t len = strlen(home) + 32;
         char *path = malloc(len);
-        snprintf(path, len, "%s/.config/flotty/config", home);
+        snprintf(path, len, "%s/.config/flottywm/config", home);
         return path;
     }
     return NULL;
@@ -127,12 +127,43 @@ static void expand_vars(struct compositor_config *cfg, char *str, size_t max_len
     }
 }
 
+static bool copy_default_config(const char *dest_path) {
+    char exe_path[1024];
+    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+    if (len <= 0) return false;
+    exe_path[len] = '\0';
+    
+    char *last_slash = strrchr(exe_path, '/');
+    if (!last_slash) return false;
+    *last_slash = '\0';
+    
+    char default_path[2048];
+    snprintf(default_path, sizeof(default_path), "%s/config.default", exe_path);
+    
+    FILE *src = fopen(default_path, "r");
+    if (!src) return false;
+    
+    FILE *dst = fopen(dest_path, "w");
+    if (!dst) {
+        fclose(src);
+        return false;
+    }
+    
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), src)) > 0) {
+        fwrite(buf, 1, n, dst);
+    }
+    
+    fclose(src);
+    fclose(dst);
+    return true;
+}
+
 int config_load(struct compositor_config *cfg) {
     cfg->gaps = 8;
     cfg->outer_gaps = 8;
     cfg->mfact = 0.55;
-    cfg->term = strdup("alacritty");
-    cfg->launcher = strdup("fuzzel");
     cfg->num_bindings = 0;
     cfg->num_vars = 0;
     
@@ -140,8 +171,25 @@ int config_load(struct compositor_config *cfg) {
     if (!path) return -1;
     
     FILE *f = fopen(path, "r");
-    free(path);
-    if (!f) return -1;
+    if (!f) {
+        char *dir = strdup(path);
+        char *last_slash = strrchr(dir, '/');
+        if (last_slash) {
+            *last_slash = '\0';
+            mkdir(dir, 0755);
+        }
+        free(dir);
+        
+        if (copy_default_config(path)) {
+            printf("FlottyWM: created default config at %s\n", path);
+        }
+        
+        f = fopen(path, "r");
+    }
+    if (!f) {
+        free(path);
+        return -1;
+    }
     
     char line[512];
     while (fgets(line, sizeof(line), f)) {
@@ -169,15 +217,7 @@ int config_load(struct compositor_config *cfg) {
         if (strcmp(key, "gaps") == 0) cfg->gaps = atoi(v);
         else if (strcmp(key, "outer_gaps") == 0) cfg->outer_gaps = atoi(v);
         else if (strcmp(key, "mfact") == 0) cfg->mfact = atof(v);
-        else if (strcmp(key, "term") == 0) {
-            free(cfg->term);
-            cfg->term = strdup(v);
-            set_var(cfg, "$term", v);
-        } else if (strcmp(key, "launcher") == 0) {
-            free(cfg->launcher);
-            cfg->launcher = strdup(v);
-            set_var(cfg, "$launcher", v);
-        } else if (strcmp(key, "bind") == 0) {
+        else if (strcmp(key, "bind") == 0) {
             if (cfg->num_bindings >= MAX_BINDINGS) continue;
             char bind_str[64], action_str[32], arg_str[256];
             int n = sscanf(v, "%63s %31s %255[^\n]", bind_str, action_str, arg_str);
@@ -197,5 +237,6 @@ int config_load(struct compositor_config *cfg) {
         }
     }
     fclose(f);
+    free(path);
     return 0;
 }

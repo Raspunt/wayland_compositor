@@ -36,7 +36,7 @@ static int handle_signal(int sig, void *data) {
 }
 
 int main(void) {
-    printf("Hello wlroots %s\n", WLR_VERSION_STR);
+    printf("FlottyWM %s (wlroots %s)\n", "0.1.0", WLR_VERSION_STR);
 
     signal(SIGCHLD, SIG_IGN);
 

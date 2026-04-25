@@ -1,4 +1,4 @@
-project('simple', 'c',
+project('flottywm', 'c',
   version: '0.1.0',
   default_options: [
     'warning_level=2',
@@ -41,7 +41,13 @@ src_files = files(
   'src/config.c'
 )
 
-executable('myexe',
+configure_file(
+  input: 'config.default',
+  output: 'config.default',
+  copy: true
+)
+
+executable('flottywm',
   src_files, xdg_shell_h, layer_shell_h,
   include_directories: include_directories('src', '.', 'build'),
   dependencies: [wlroots, wayland_server, xkbcommon],

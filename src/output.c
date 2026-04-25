@@ -5,20 +5,9 @@
 #include <assert.h>
 #include <time.h>
 
-#include <wlr/version.h>
-#include <wlr/backend.h>
-#include <wlr/backend/session.h>
-#include <wlr/render/allocator.h>
-#include <wlr/render/wlr_renderer.h>
-#include <wlr/render/pass.h>
-#include <wlr/render/swapchain.h>
-#include <wlr/types/wlr_buffer.h>
-#include <wlr/types/wlr_keyboard.h>
-#include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_scene.h>
-#include <wlr/util/box.h>
 #include <wlr/util/log.h>
 
 #include "src/output.h"

@@ -39,8 +39,6 @@ struct compositor_config {
     int gaps;
     int outer_gaps;
     double mfact;
-    char *term;
-    char *launcher;
     struct keybinding bindings[MAX_BINDINGS];
     int num_bindings;
     struct config_var vars[MAX_VARS];
