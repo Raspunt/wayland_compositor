@@ -38,7 +38,7 @@ sudo apt install -y \
 ## Building
 
 ```bash
-git clone https://github.com/Raspunt/wayland_compositor.git flottywm
+git clone https://github.com/Raspunt/flottyWM.git flottywm
 cd flottywm
 make build        # or make rebuild for a clean rebuild
 ```

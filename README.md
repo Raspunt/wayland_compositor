@@ -14,7 +14,7 @@ A tiling Wayland compositor built on **wlroots**. Simple, lightweight, and fast.
 ## Быстрый старт / Quick Start
 
 ```bash
-git clone https://github.com/Raspunt/wayland_compositor.git flottywm
+git clone https://github.com/Raspunt/flottyWM.git flottywm
 cd flottywm
 make build
 ./build/flottywm
