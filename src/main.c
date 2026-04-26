@@ -17,6 +17,7 @@
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_scene.h>  
 #include <wlr/types/wlr_data_device.h>
+#include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
@@ -24,12 +25,29 @@
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_export_dmabuf_v1.h>
+#include <wlr/types/wlr_data_control_v1.h>
+#include <wlr/types/wlr_primary_selection_v1.h>
+#include <wlr/types/wlr_fractional_scale_v1.h>
+#include <wlr/types/wlr_linux_dmabuf_v1.h>
+#include <wlr/types/wlr_single_pixel_buffer_v1.h>
 
 #include "src/output.h"
 #include "src/input.h"   
 #include "src/compositor.h"
 #include "src/renderer.h"
 #include "src/layer_shell.h"
+
+static void seat_request_set_selection(struct wl_listener *listener, void *data) {
+    struct compositor_state *server = wl_container_of(listener, server, request_set_selection);
+    struct wlr_seat_request_set_selection_event *event = data;
+    wlr_seat_set_selection(server->seat, event->source, event->serial);
+}
+
+static void seat_request_set_primary_selection(struct wl_listener *listener, void *data) {
+    struct compositor_state *server = wl_container_of(listener, server, request_set_primary_selection);
+    struct wlr_seat_request_set_primary_selection_event *event = data;
+    wlr_seat_set_primary_selection(server->seat, event->source, event->serial);
+}
 
 static int handle_signal(int sig, void *data) {
     (void)sig;
@@ -58,6 +76,8 @@ int main(void) {
 
     // Инициализируем listeners, чтобы wl_list_remove был безопасен при cleanup
     wl_list_init(&cs.request_set_cursor.link);
+    wl_list_init(&cs.request_set_selection.link);
+    wl_list_init(&cs.request_set_primary_selection.link);
     wl_list_init(&cs.new_xdg_toplevel.link);
     wl_list_init(&cs.new_xdg_popup.link);
     wl_list_init(&cs.cursor_motion.link);
@@ -119,6 +139,11 @@ int main(void) {
     cs.request_set_cursor.notify = seat_request_set_cursor;
     wl_signal_add(&cs.seat->events.request_set_cursor, &cs.request_set_cursor);
 
+    cs.request_set_selection.notify = seat_request_set_selection;
+    wl_signal_add(&cs.seat->events.request_set_selection, &cs.request_set_selection);
+    cs.request_set_primary_selection.notify = seat_request_set_primary_selection;
+    wl_signal_add(&cs.seat->events.request_set_primary_selection, &cs.request_set_primary_selection);
+
     cs.scene = wlr_scene_create();
     if (!cs.scene) {
         fprintf(stderr, "Failed to create scene\n");
@@ -144,6 +169,8 @@ int main(void) {
     wlr_compositor_create(cs.wl_display, 6, cs.renderer);
     wlr_subcompositor_create(cs.wl_display);
     wlr_data_device_manager_create(cs.wl_display);
+    wlr_data_control_manager_v1_create(cs.wl_display);
+    wlr_primary_selection_v1_device_manager_create(cs.wl_display);
     wlr_xdg_output_manager_v1_create(cs.wl_display, cs.output_layout);
 
     cs.new_output.notify = new_output_notify;
@@ -217,6 +244,9 @@ int main(void) {
 
     wlr_screencopy_manager_v1_create(cs.wl_display);
     wlr_export_dmabuf_manager_v1_create(cs.wl_display);
+    wlr_fractional_scale_manager_v1_create(cs.wl_display, 1);
+    wlr_linux_dmabuf_v1_create_with_renderer(cs.wl_display, 4, cs.renderer);
+    wlr_single_pixel_buffer_manager_v1_create(cs.wl_display);
 
     sigint = wl_event_loop_add_signal(cs.wl_event_loop, SIGINT, handle_signal, cs.wl_display);
     sigterm = wl_event_loop_add_signal(cs.wl_event_loop, SIGTERM, handle_signal, cs.wl_display);
@@ -253,6 +283,8 @@ cleanup:
     wl_display_destroy_clients(cs.wl_display);
 
     wl_list_remove(&cs.request_set_cursor.link);
+    wl_list_remove(&cs.request_set_selection.link);
+    wl_list_remove(&cs.request_set_primary_selection.link);
     wl_list_remove(&cs.new_xdg_toplevel.link);
     wl_list_remove(&cs.new_xdg_popup.link);
     wl_list_remove(&cs.cursor_motion.link);

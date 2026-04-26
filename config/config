@@ -10,7 +10,7 @@ $launcher fuzzel
 
 # Автостарт программ при запуске compositor'а
 # exec-once waybar
-# exec-once swaybg -i ~/Pictures/wallpaper.jpg -m fill
+exec-once swaybg -i ~/.config/flottywm/wallpaper.jpg -m fill
 
 $mod Alt
 

@@ -41,11 +41,8 @@ src_files = files(
   'src/config.c'
 )
 
-configure_file(
-  input: 'config.default',
-  output: 'config.default',
-  copy: true
-)
+# Копируем папку config/ (конфиг + wallpaper) в build dir
+run_command('cp', '-r', meson.current_source_dir() / 'config', meson.current_build_dir(), check: true)
 
 executable('flottywm',
   src_files, xdg_shell_h, layer_shell_h,

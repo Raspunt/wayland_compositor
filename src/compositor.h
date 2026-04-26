@@ -33,6 +33,8 @@ struct compositor_state {
     struct wlr_seat *seat;
     
     struct wl_listener request_set_cursor;
+    struct wl_listener request_set_selection;
+    struct wl_listener request_set_primary_selection;
 
     struct wlr_xdg_shell *xdg_shell;
     struct wl_listener new_xdg_toplevel;

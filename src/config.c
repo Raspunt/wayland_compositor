@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <xkbcommon/xkbcommon.h>
 #include <wlr/types/wlr_keyboard.h>
 
@@ -151,6 +152,37 @@ static void expand_vars(struct compositor_config *cfg, char *str, size_t max_len
     }
 }
 
+static bool copy_dir_contents(const char *src_dir, const char *dst_dir) {
+    DIR *d = opendir(src_dir);
+    if (!d) return false;
+    
+    struct dirent *entry;
+    bool ok = true;
+    while ((entry = readdir(d)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+        
+        char src_path[2048];
+        char dst_path[2048];
+        snprintf(src_path, sizeof(src_path), "%s/%s", src_dir, entry->d_name);
+        snprintf(dst_path, sizeof(dst_path), "%s/%s", dst_dir, entry->d_name);
+        
+        FILE *src = fopen(src_path, "rb");
+        if (!src) { ok = false; continue; }
+        FILE *dst = fopen(dst_path, "wb");
+        if (!dst) { fclose(src); ok = false; continue; }
+        
+        char buf[4096];
+        size_t n;
+        while ((n = fread(buf, 1, sizeof(buf), src)) > 0) {
+            fwrite(buf, 1, n, dst);
+        }
+        fclose(src);
+        fclose(dst);
+    }
+    closedir(d);
+    return ok;
+}
+
 static bool copy_default_config(const char *dest_path) {
     char exe_path[1024];
     ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
@@ -161,27 +193,18 @@ static bool copy_default_config(const char *dest_path) {
     if (!last_slash) return false;
     *last_slash = '\0';
     
-    char default_path[2048];
-    snprintf(default_path, sizeof(default_path), "%s/config.default", exe_path);
+    char src_dir[2048];
+    snprintf(src_dir, sizeof(src_dir), "%s/config", exe_path);
     
-    FILE *src = fopen(default_path, "r");
-    if (!src) return false;
-    
-    FILE *dst = fopen(dest_path, "w");
-    if (!dst) {
-        fclose(src);
-        return false;
+    char *dest_dir = strdup(dest_path);
+    char *last_slash2 = strrchr(dest_dir, '/');
+    if (last_slash2) {
+        *last_slash2 = '\0';
+        mkdir(dest_dir, 0755);
     }
-    
-    char buf[4096];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), src)) > 0) {
-        fwrite(buf, 1, n, dst);
-    }
-    
-    fclose(src);
-    fclose(dst);
-    return true;
+    bool ok = copy_dir_contents(src_dir, dest_dir);
+    free(dest_dir);
+    return ok;
 }
 
 int config_load(struct compositor_config *cfg) {
