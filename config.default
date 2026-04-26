@@ -4,6 +4,14 @@ mfact 0.55
 $term alacritty
 $launcher fuzzel
 
+# Переменные окружения
+# env SDL_VIDEODRIVER wayland
+# env MOZ_ENABLE_WAYLAND 1
+
+# Автостарт программ при запуске compositor'а
+# exec-once waybar
+# exec-once swaybg -i ~/Pictures/wallpaper.jpg -m fill
+
 $mod Alt
 
 bind $mod+Return exec $term
@@ -34,12 +42,18 @@ bind $mod+Shift+0 movetoworkspace 10
 
 bind $mod+h focusprev
 bind $mod+l focusnext
+bind $mod+Left focusleft
+bind $mod+Right focusright
+bind $mod+Up focusup
+bind $mod+Down focusdown
 bind $mod+Shift+h moveprev
 bind $mod+Shift+l movenext
 
-bind $mod+Shift+Left resizeleft
-bind $mod+Shift+Right resizeright
-bind $mod+Shift+Up resizeup
-bind $mod+Shift+Down resizedown
+bind $mod+Ctrl+Left resizeleft
+bind $mod+Ctrl+Right resizeright
+bind $mod+Ctrl+Up resizeup
+bind $mod+Ctrl+Down resizedown
 
+bind $mod+Shift+space togglefloating
+bind $mod+Shift+c reload
 bind $mod+q kill

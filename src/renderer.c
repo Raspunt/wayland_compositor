@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <limits.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_seat.h>
@@ -240,6 +241,49 @@ void focus_prev(struct compositor_state *server) {
     }
 }
 
+void focus_direction(struct compositor_state *server, enum direction dir) {
+    struct compositor_toplevel *current = get_focused_toplevel(server);
+    if (!current) return;
+    
+    struct wlr_box current_geo;
+    wlr_xdg_surface_get_geometry(current->xdg_toplevel->base, &current_geo);
+    int current_cx = current->border_tree->node.x + current_geo.x + current_geo.width / 2;
+    int current_cy = current->border_tree->node.y + current_geo.y + current_geo.height / 2;
+    
+    struct compositor_toplevel *best = NULL;
+    int best_dist = INT_MAX;
+    
+    struct compositor_toplevel *t;
+    wl_list_for_each(t, &server->toplevels, link) {
+        if (t == current) continue;
+        if (t->workspace != server->active_workspace) continue;
+        if (!t->border_tree->node.enabled) continue;
+        
+        struct wlr_box geo;
+        wlr_xdg_surface_get_geometry(t->xdg_toplevel->base, &geo);
+        int cx = t->border_tree->node.x + geo.x + geo.width / 2;
+        int cy = t->border_tree->node.y + geo.y + geo.height / 2;
+        
+        bool in_direction = false;
+        switch (dir) {
+        case DIR_LEFT:  in_direction = (cx < current_cx); break;
+        case DIR_RIGHT: in_direction = (cx > current_cx); break;
+        case DIR_UP:    in_direction = (cy < current_cy); break;
+        case DIR_DOWN:  in_direction = (cy > current_cy); break;
+        }
+        
+        if (!in_direction) continue;
+        
+        int dist = (cx - current_cx) * (cx - current_cx) + (cy - current_cy) * (cy - current_cy);
+        if (dist < best_dist) {
+            best_dist = dist;
+            best = t;
+        }
+    }
+    
+    if (best) focus_toplevel(best);
+}
+
 void move_toplevel_next(struct compositor_state *server) {
     struct compositor_toplevel *current = get_focused_toplevel(server);
     if (!current || current->workspace != server->active_workspace) return;
@@ -344,6 +388,13 @@ void resize_toplevel_down(struct compositor_state *server) {
     /* Для тайлинговых окон вертикальный resize не поддерживается в master-stack layout */
 }
 
+void toggle_floating(struct compositor_state *server) {
+    struct compositor_toplevel *t = get_focused_toplevel(server);
+    if (!t) return;
+    t->floating = !t->floating;
+    arrange_workspace(server, t->workspace);
+}
+
 void focus_toplevel(struct compositor_toplevel *toplevel) {
     if (toplevel == NULL) {
         return;
@@ -376,8 +427,6 @@ void focus_toplevel(struct compositor_toplevel *toplevel) {
     struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
     
     wlr_scene_node_raise_to_top(&toplevel->border_tree->node);
-    wl_list_remove(&toplevel->link);
-    wl_list_insert(&server->toplevels, &toplevel->link);
     
     wlr_xdg_toplevel_set_activated(toplevel->xdg_toplevel, true);
     set_border_color(toplevel, BORDER_FOCUSED);

@@ -11,7 +11,7 @@ struct compositor_state;
 
 struct compositor_toplevel {
     struct wl_list link;
-    struct compositor_state *server;  // указатель на неполный тип - ок
+    struct compositor_state *server;  
     struct wlr_xdg_toplevel *xdg_toplevel;
     struct wlr_scene_tree *scene_tree;
     struct wlr_scene_tree *border_tree;
@@ -34,8 +34,16 @@ struct compositor_popup {
 	struct wl_listener destroy;
 };
 
+enum direction {
+    DIR_LEFT,
+    DIR_RIGHT,
+    DIR_UP,
+    DIR_DOWN,
+};
+
 void focus_toplevel(struct compositor_toplevel *toplevel);
 struct compositor_toplevel *get_focused_toplevel(struct compositor_state *server);
+void focus_direction(struct compositor_state *server, enum direction dir);
 void switch_workspace(struct compositor_state *server, int workspace);
 void move_toplevel_to_workspace(struct compositor_toplevel *toplevel, int workspace);
 void arrange_workspace(struct compositor_state *server, int workspace);
@@ -49,6 +57,7 @@ void resize_toplevel_left(struct compositor_state *server);
 void resize_toplevel_right(struct compositor_state *server);
 void resize_toplevel_up(struct compositor_state *server);
 void resize_toplevel_down(struct compositor_state *server);
+void toggle_floating(struct compositor_state *server);
 struct compositor_toplevel *desktop_toplevel_at(struct compositor_state *server, 
         double lx, double ly, struct wlr_surface **surface, double *sx, double *sy);
 

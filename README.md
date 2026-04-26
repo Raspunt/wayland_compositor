@@ -2,6 +2,15 @@
 
 Тайлинговый Wayland compositor на базе **wlroots**. Простой, лёгкий и быстрый.
 
+## Философия
+
+- **Минимализм** — только то, что нужно для работы. Нет анимаций, blur, теней, скруглений и другого декора.
+- **Стабильность** — код простой и предсказуемый. Меньше кода = меньше багов.
+- **Оптимизация** — всё ради скорости и низкого потребления ресурсов. Никаких "красивостей" за счёт CPU/GPU.
+- **Практичность** — конфиг понятен с первого взгляда, hot-reload без перезапуска, автостарт из коробки.
+
+Если ты ищешь eyecandy с анимациями и эффектами — это не сюда. FlottyWM для тех, кто хочет, чтобы WM просто работал и не мешал.
+
 ## Возможности
 
 - **Master-stack layout** — классическое тайлинговое расположение окон
@@ -53,24 +62,49 @@ make run
 ./build/flottywm
 ```
 
+## Screencast (OBS, Discord и т.д.)
+
+FlottyWM поддерживает протоколы `zwlr_screencopy_manager_v1` и `zwlr_export_dmabuf_manager_v1`. Для захвата экрана в OBS, Discord и других приложениях установите:
+
+```bash
+sudo apt install pipewire xdg-desktop-portal xdg-desktop-portal-wlr
+```
+
+Запустите `pipewire` и `xdg-desktop-portal` (обычно они стартуют автоматически через systemd в пользовательской сессии). После этого в OBS выбирайте источник **PipeWire Screen Capture**.
+
+> **Важно:** убедитесь, что в системе не запущен другой `xdg-desktop-portal` backend (например, `xdg-desktop-portal-gtk` или `xdg-desktop-portal-kde`) одновременно с `xdg-desktop-portal-wlr`, иначе портал может конфликтовать.
+
 ## Конфигурация
 
 Конфиг располагается по пути `~/.config/flottywm/config`.
+
+Поддерживаются комментарии через `#` (в начале строки или в конце).
 
 Пример минимального конфига:
 
 ```ini
 gaps 8
 outer_gaps 8
-mfact 0.55
+mfact 0.55  # соотношение master/stack
 
 $term alacritty
 $launcher fuzzel
+
+# Переменные окружения
+# env SDL_VIDEODRIVER wayland
+# env MOZ_ENABLE_WAYLAND 1
+
+# Автостарт программ при запуске compositor'а
+# exec-once waybar
+# exec-once swaybg -i ~/Pictures/wallpaper.jpg -m fill
+
 $mod Alt
 
 bind $mod+Return exec $term
 bind $mod+d exec $launcher
 bind $mod+Escape exit
+bind $mod+Shift+space togglefloating
+bind $mod+Shift+c reload
 bind $mod+q kill
 
 bind $mod+1 workspace 1
@@ -97,13 +131,17 @@ bind $mod+Shift+0 movetoworkspace 10
 
 bind $mod+h focusprev
 bind $mod+l focusnext
+bind $mod+Left focusleft
+bind $mod+Right focusright
+bind $mod+Up focusup
+bind $mod+Down focusdown
 bind $mod+Shift+h moveprev
 bind $mod+Shift+l movenext
 
-bind $mod+Shift+Left resizeleft
-bind $mod+Shift+Right resizeright
-bind $mod+Shift+Up resizeup
-bind $mod+Shift+Down resizedown
+bind $mod+Ctrl+Left resizeleft
+bind $mod+Ctrl+Right resizeright
+bind $mod+Ctrl+Up resizeup
+bind $mod+Ctrl+Down resizedown
 ```
 
 ### Переменные
@@ -120,12 +158,17 @@ bind $mod+Return exec $term
 
 | Команда | Описание |
 |---------|----------|
+| `env <NAME> <VALUE>` | Задать переменную окружения |
 | `exec <программа>` | Запустить программу |
+| `exec-once <команда>` | Запустить при старте compositor'а (waybar, swaybg и т.д.) |
 | `exit` | Завершить compositor |
 | `workspace <N>` | Переключиться на воркспейс N (1–10) |
 | `movetoworkspace <N>` | Переместить активное окно на воркспейс N |
 | `focusprev` / `focusnext` | Фокус на предыдущее / следующее окно |
+| `focusleft` / `focusright` / `focusup` / `focusdown` | Фокус в заданном направлении |
 | `moveprev` / `movenext` | Поменять активное окно местами |
+| `togglefloating` | Переключить окно в floating / tiled |
+| `reload` | Перезагрузить конфиг без перезапуска |
 | `kill` | Закрыть активное окно |
 | `resizeleft` / `resizeright` | Изменить ширину master-области |
 | `resizeup` / `resizedown` | Изменить размер floating окна |

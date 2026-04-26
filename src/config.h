@@ -18,10 +18,18 @@ enum binding_action {
     BINDING_RESIZE_RIGHT,
     BINDING_RESIZE_UP,
     BINDING_RESIZE_DOWN,
+    BINDING_FOCUS_LEFT,
+    BINDING_FOCUS_RIGHT,
+    BINDING_FOCUS_UP,
+    BINDING_FOCUS_DOWN,
+    BINDING_TOGGLE_FLOATING,
+    BINDING_RELOAD,
 };
 
 #define MAX_BINDINGS 128
 #define MAX_VARS 32
+#define MAX_EXEC_ONCE 32
+#define MAX_ENVS 32
 
 struct config_var {
     char *name;
@@ -43,8 +51,16 @@ struct compositor_config {
     int num_bindings;
     struct config_var vars[MAX_VARS];
     int num_vars;
+    char *exec_once[MAX_EXEC_ONCE];
+    int num_exec_once;
+    struct env_var {
+        char *name;
+        char *value;
+    } envs[MAX_ENVS];
+    int num_envs;
 };
 
 int config_load(struct compositor_config *cfg);
+void config_free(struct compositor_config *cfg);
 
 #endif

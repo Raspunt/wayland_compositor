@@ -2,7 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
-#include <unistd.h> 
+#include <unistd.h>
+#include <spawn.h>
 #include <wayland-server-core.h>
 
 #include <wlr/version.h>
@@ -21,6 +22,8 @@
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <wlr/types/wlr_screencopy_v1.h>
+#include <wlr/types/wlr_export_dmabuf_v1.h>
 
 #include "src/output.h"
 #include "src/input.h"   
@@ -44,6 +47,11 @@ int main(void) {
     struct compositor_config cfg = {0};
     config_load(&cfg);
     cs.cfg = &cfg;
+
+    /* Применяем env-переменные из конфига */
+    for (int i = 0; i < cfg.num_envs; i++) {
+        setenv(cfg.envs[i].name, cfg.envs[i].value, 1);
+    }
     
     struct wl_event_source *sigint = NULL;
     struct wl_event_source *sigterm = NULL;
@@ -207,6 +215,9 @@ int main(void) {
     cs.new_xdg_toplevel_decoration.notify = server_new_xdg_toplevel_decoration;
     wl_signal_add(&cs.xdg_decoration_manager->events.new_toplevel_decoration, &cs.new_xdg_toplevel_decoration);
 
+    wlr_screencopy_manager_v1_create(cs.wl_display);
+    wlr_export_dmabuf_manager_v1_create(cs.wl_display);
+
     sigint = wl_event_loop_add_signal(cs.wl_event_loop, SIGINT, handle_signal, cs.wl_display);
     sigterm = wl_event_loop_add_signal(cs.wl_event_loop, SIGTERM, handle_signal, cs.wl_display);
 
@@ -223,9 +234,18 @@ int main(void) {
         fprintf(stderr, "Failed to start backend\n");
         goto cleanup;
     }
+
+    /* Запускаем exec-once команды из конфига */
+    extern char **environ;
+    for (int i = 0; i < cfg.num_exec_once; i++) {
+        pid_t pid;
+        char *cmd = cfg.exec_once[i];
+        char *argv[] = {"sh", "-c", cmd, NULL};
+        posix_spawnp(&pid, "sh", NULL, NULL, argv, environ);
+    }
     
     printf("Compositor running on WAYLAND_DISPLAY=%s\n", socket);
-    printf("Press Alt+Enter for terminal, Alt+Esc to exit\n");
+    printf("Press Alt+Return for terminal, Alt+Escape to exit\n");
 
     wl_display_run(cs.wl_display);
     
