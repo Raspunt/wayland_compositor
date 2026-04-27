@@ -13,6 +13,7 @@ wayland_protocols = dependency('wayland-protocols')
 
 # Добавляем xkbcommon (нужен для keyboard.c)
 xkbcommon = dependency('xkbcommon')
+libinput = dependency('libinput')
 
 protocols_dir = wayland_protocols.get_variable('pkgdatadir')
 
@@ -47,7 +48,7 @@ run_command('cp', '-r', meson.current_source_dir() / 'config', meson.current_bui
 executable('flottywm',
   src_files, xdg_shell_h, layer_shell_h,
   include_directories: include_directories('src', '.', 'build'),
-  dependencies: [wlroots, wayland_server, xkbcommon],
+  dependencies: [wlroots, wayland_server, xkbcommon, libinput],
   c_args: ['-DWLR_USE_UNSTABLE'],
   install: true
 )

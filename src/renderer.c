@@ -28,15 +28,15 @@ void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *data);
 void xdg_popup_commit(struct wl_listener *listener, void *data);
 void xdg_popup_destroy(struct wl_listener *listener, void *data);
 
-static const float BORDER_FOCUSED[4] = {1.0, 0.85, 0.0, 1.0};   /* Жёлтый как в Hyprland */
-static const float BORDER_UNFOCUSED[4] = {0.2, 0.2, 0.2, 1.0}; /* Тёмно-серый */
-const int BORDER_WIDTH = 3;
+static const float DEFAULT_BORDER_FOCUSED[4] = {1.0, 0.85, 0.0, 1.0};   /* Жёлтый как в Hyprland */
+static const float DEFAULT_BORDER_UNFOCUSED[4] = {0.2, 0.2, 0.2, 1.0}; /* Тёмно-серый */
+static const int DEFAULT_BORDER_WIDTH = 3;
 
 static void update_borders(struct compositor_toplevel *toplevel) {
     if (!toplevel->border_tree) return;
     struct wlr_box geo;
     wlr_xdg_surface_get_geometry(toplevel->xdg_toplevel->base, &geo);
-    int bw = BORDER_WIDTH;
+    int bw = toplevel->server->cfg ? toplevel->server->cfg->border_width : DEFAULT_BORDER_WIDTH;
     int w = geo.width + 2 * bw;
 
     wlr_scene_node_set_position(&toplevel->borders[0]->node, 0, 0);
@@ -139,7 +139,7 @@ void arrange_workspace(struct compositor_state *server, int workspace) {
     
     if (count == 0) return;
     
-    int bw2 = 2 * BORDER_WIDTH;
+    int bw2 = 2 * (server->cfg ? server->cfg->border_width : DEFAULT_BORDER_WIDTH);
     int content_w = area_w - bw2;
     int content_h = area_h - bw2;
 
@@ -418,7 +418,7 @@ void focus_toplevel(struct compositor_toplevel *toplevel) {
             if (prev_tree) {
                 struct compositor_toplevel *prev = prev_tree->node.data;
                 if (prev) {
-                    set_border_color(prev, BORDER_UNFOCUSED);
+                    set_border_color(prev, server->cfg ? server->cfg->border_unfocused : DEFAULT_BORDER_UNFOCUSED);
                 }
             }
         }
@@ -429,7 +429,7 @@ void focus_toplevel(struct compositor_toplevel *toplevel) {
     wlr_scene_node_raise_to_top(&toplevel->border_tree->node);
     
     wlr_xdg_toplevel_set_activated(toplevel->xdg_toplevel, true);
-    set_border_color(toplevel, BORDER_FOCUSED);
+    set_border_color(toplevel, server->cfg ? server->cfg->border_focused : DEFAULT_BORDER_FOCUSED);
     
     if (keyboard != NULL) {
         wlr_seat_keyboard_notify_enter(seat, surface,
@@ -470,10 +470,11 @@ void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
     toplevel->scene_tree->node.data = toplevel;
     xdg_toplevel->base->data = toplevel->scene_tree;
 
-    wlr_scene_node_set_position(&toplevel->scene_tree->node, BORDER_WIDTH, BORDER_WIDTH);
+    int bw = server->cfg ? server->cfg->border_width : DEFAULT_BORDER_WIDTH;
+    wlr_scene_node_set_position(&toplevel->scene_tree->node, bw, bw);
 
     for (int i = 0; i < 4; i++) {
-        toplevel->borders[i] = wlr_scene_rect_create(toplevel->border_tree, 0, 0, BORDER_UNFOCUSED);
+        toplevel->borders[i] = wlr_scene_rect_create(toplevel->border_tree, 0, 0, server->cfg ? server->cfg->border_unfocused : DEFAULT_BORDER_UNFOCUSED);
     }
     update_borders(toplevel);
 

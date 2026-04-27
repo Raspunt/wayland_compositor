@@ -12,6 +12,21 @@ $launcher fuzzel
 # exec-once waybar
 exec-once swaybg -i ~/.config/flottywm/wallpaper.jpg -m fill
 
+# Keyboard layout (comma-separated list, e.g. us,ru)
+# kb_layout us,ru
+# kb_options grp:alt_shift_toggle
+
+# Touchpad tap to click
+# tap_to_click true
+
+# Focus follows mouse (auto-focus window under cursor)
+focus_follows_mouse true
+
+# Border settings
+border_width 3
+border_focused 1.0 0.85 0.0 1.0
+border_unfocused 0.2 0.2 0.2 1.0
+
 $mod Alt
 
 bind $mod+Return exec $term
@@ -56,4 +71,4 @@ bind $mod+Ctrl+Down resizedown
 
 bind $mod+Shift+space togglefloating
 bind $mod+Shift+c reload
-bind $mod+q kill
+bind Ctrl+q kill

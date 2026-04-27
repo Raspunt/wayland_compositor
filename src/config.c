@@ -89,6 +89,8 @@ void config_free(struct compositor_config *cfg) {
         free(cfg->envs[i].name);
         free(cfg->envs[i].value);
     }
+    free(cfg->kb_layout);
+    free(cfg->kb_options);
     memset(cfg, 0, sizeof(*cfg));
 }
 
@@ -215,6 +217,16 @@ int config_load(struct compositor_config *cfg) {
     cfg->num_vars = 0;
     cfg->num_exec_once = 0;
     cfg->num_envs = 0;
+    cfg->focus_follows_mouse = true;
+    cfg->border_width = 3;
+    cfg->border_focused[0] = 1.0f;
+    cfg->border_focused[1] = 0.85f;
+    cfg->border_focused[2] = 0.0f;
+    cfg->border_focused[3] = 1.0f;
+    cfg->border_unfocused[0] = 0.2f;
+    cfg->border_unfocused[1] = 0.2f;
+    cfg->border_unfocused[2] = 0.2f;
+    cfg->border_unfocused[3] = 1.0f;
     
     char *path = get_config_path();
     if (!path) return -1;
@@ -280,6 +292,47 @@ int config_load(struct compositor_config *cfg) {
                 cfg->envs[cfg->num_envs].name = strdup(env_name);
                 cfg->envs[cfg->num_envs].value = strdup(env_value);
                 cfg->num_envs++;
+            }
+        }
+        else if (strcmp(key, "kb_layout") == 0) {
+            free(cfg->kb_layout);
+            cfg->kb_layout = strdup(v);
+        }
+        else if (strcmp(key, "kb_options") == 0) {
+            free(cfg->kb_options);
+            cfg->kb_options = strdup(v);
+        }
+        else if (strcmp(key, "tap_to_click") == 0) {
+            cfg->tap_to_click = (strcmp(v, "true") == 0 ||
+                                 strcmp(v, "1") == 0 ||
+                                 strcmp(v, "yes") == 0 ||
+                                 strcmp(v, "on") == 0);
+        }
+        else if (strcmp(key, "focus_follows_mouse") == 0) {
+            cfg->focus_follows_mouse = (strcmp(v, "true") == 0 ||
+                                        strcmp(v, "1") == 0 ||
+                                        strcmp(v, "yes") == 0 ||
+                                        strcmp(v, "on") == 0);
+        }
+        else if (strcmp(key, "border_width") == 0) {
+            cfg->border_width = atoi(v);
+        }
+        else if (strcmp(key, "border_focused") == 0) {
+            float r, g, b, a;
+            if (sscanf(v, "%f %f %f %f", &r, &g, &b, &a) == 4) {
+                cfg->border_focused[0] = r;
+                cfg->border_focused[1] = g;
+                cfg->border_focused[2] = b;
+                cfg->border_focused[3] = a;
+            }
+        }
+        else if (strcmp(key, "border_unfocused") == 0) {
+            float r, g, b, a;
+            if (sscanf(v, "%f %f %f %f", &r, &g, &b, &a) == 4) {
+                cfg->border_unfocused[0] = r;
+                cfg->border_unfocused[1] = g;
+                cfg->border_unfocused[2] = b;
+                cfg->border_unfocused[3] = a;
             }
         }
         else if (strcmp(key, "bind") == 0) {

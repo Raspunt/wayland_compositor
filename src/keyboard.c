@@ -232,9 +232,16 @@ void server_new_keyboard(struct compositor_state *server,
 	keyboard->server = server;
 	keyboard->wlr_keyboard = wlr_keyboard;
 
-	/* Подготавливаем XKB keymap (раскладка US по умолчанию) */
+	/* Подготавливаем XKB keymap */
 	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-	struct xkb_keymap *keymap = xkb_keymap_new_from_names(context, NULL,
+	struct xkb_rule_names names = {
+		.rules = NULL,
+		.model = NULL,
+		.layout = server->cfg && server->cfg->kb_layout ? server->cfg->kb_layout : "us",
+		.variant = NULL,
+		.options = server->cfg && server->cfg->kb_options ? server->cfg->kb_options : NULL,
+	};
+	struct xkb_keymap *keymap = xkb_keymap_new_from_names(context, &names,
 		XKB_KEYMAP_COMPILE_NO_FLAGS);
 
 	wlr_keyboard_set_keymap(wlr_keyboard, keymap);

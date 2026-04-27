@@ -4,6 +4,7 @@
 #include <wlr/types/wlr_xdg_shell.h> 
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/util/log.h>
+#include <wlr/backend/libinput.h>
 #include <linux/input-event-codes.h>
 
 #include "src/output.h"
@@ -37,7 +38,6 @@ void begin_interactive(struct compositor_toplevel *toplevel,
 	server->grab_y = server->cursor->y - toplevel->border_tree->node.y;
 }
 
-/* ИСПРАВЛЕНО: Теперь реально ищет окно под курсором */
 struct compositor_toplevel *desktop_toplevel_at(struct compositor_state *server, 
     double lx, double ly, struct wlr_surface **surface, double *sx, double *sy) {
 	
@@ -78,8 +78,13 @@ static void process_cursor_motion(struct compositor_state *server, uint32_t time
 	/* Passthrough: отправляем движение клиенту под курсором */
 	double sx, sy;
 	struct wlr_surface *surface = NULL;
-	desktop_toplevel_at(server,
+	struct compositor_toplevel *toplevel = desktop_toplevel_at(server,
 		server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+	
+	/* Focus follows mouse */
+	if (server->cfg && server->cfg->focus_follows_mouse && toplevel) {
+		focus_toplevel(toplevel);
+	}
 		
 	if (surface) {
 		wlr_seat_pointer_notify_enter(server->seat, surface, sx, sy);
@@ -164,6 +169,15 @@ void server_cursor_motion_absolute(struct wl_listener *listener, void *data) {
 
 void server_new_pointer(struct compositor_state *server, struct wlr_input_device *device) {
 	wlr_cursor_attach_input_device(server->cursor, device);
+
+	if (server->cfg && server->cfg->tap_to_click &&
+	    wlr_input_device_is_libinput(device)) {
+		struct libinput_device *libinput_dev = wlr_libinput_get_device_handle(device);
+		if (libinput_device_config_tap_get_finger_count(libinput_dev) > 0) {
+			libinput_device_config_tap_set_enabled(
+				libinput_dev, LIBINPUT_CONFIG_TAP_ENABLED);
+		}
+	}
 }
 
 void seat_request_set_cursor(struct wl_listener *listener, void *data) {

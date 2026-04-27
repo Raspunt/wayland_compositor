@@ -1,6 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <stdbool.h>
 #include <xkbcommon/xkbcommon.h>
 
 enum binding_action {
@@ -58,6 +59,15 @@ struct compositor_config {
         char *value;
     } envs[MAX_ENVS];
     int num_envs;
+
+    char *kb_layout;
+    char *kb_options;
+
+    bool tap_to_click;
+    bool focus_follows_mouse;
+    int border_width;
+    float border_focused[4];
+    float border_unfocused[4];
 };
 
 int config_load(struct compositor_config *cfg);

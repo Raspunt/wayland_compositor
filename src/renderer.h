@@ -50,8 +50,6 @@ void arrange_workspace(struct compositor_state *server, int workspace);
 void focus_next(struct compositor_state *server);
 void focus_prev(struct compositor_state *server);
 void move_toplevel_next(struct compositor_state *server);
-extern const int BORDER_WIDTH;
-
 void move_toplevel_prev(struct compositor_state *server);
 void resize_toplevel_left(struct compositor_state *server);
 void resize_toplevel_right(struct compositor_state *server);
